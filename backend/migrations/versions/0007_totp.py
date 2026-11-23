@@ -19,9 +19,13 @@ def upgrade() -> None:
     op.add_column("users", sa.Column("totp_key_id", sa.String(64)))
     op.add_column("users", sa.Column("totp_enabled", sa.Boolean, nullable=False, server_default="false"))
     op.add_column("users", sa.Column("totp_last_step", sa.BigInteger))
-    op.add_column("users", sa.Column("totp_recovery", postgresql.JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")))
+    op.add_column(
+        "users", sa.Column("totp_recovery", postgresql.JSONB, nullable=False, server_default=sa.text("'[]'::jsonb"))
+    )
     op.create_check_constraint("ck_users_totp_only_local", "users", "totp_secret_blob IS NULL OR issuer = 'local'")
-    op.create_check_constraint("ck_users_totp_enabled_has_secret", "users", "NOT totp_enabled OR totp_secret_blob IS NOT NULL")
+    op.create_check_constraint(
+        "ck_users_totp_enabled_has_secret", "users", "NOT totp_enabled OR totp_secret_blob IS NOT NULL"
+    )
 
 
 def downgrade() -> None:

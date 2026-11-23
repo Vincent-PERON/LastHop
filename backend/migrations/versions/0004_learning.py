@@ -20,7 +20,12 @@ def upgrade() -> None:
     op.add_column("devices", sa.Column("last_learning_status", sa.String(32)))
     op.create_table(
         "arp_entries",
-        sa.Column("device_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column(
+            "device_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("devices.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
         sa.Column("ip", postgresql.INET, primary_key=True),
         sa.Column("mac", postgresql.MACADDR, primary_key=True),
         sa.Column("vlan", sa.Integer),
@@ -30,8 +35,15 @@ def upgrade() -> None:
     op.create_table(
         "fdb_entries",
         sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("device_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("devices.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("interface_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("interfaces.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "device_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+        ),
+        sa.Column(
+            "interface_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("interfaces.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("mac", postgresql.MACADDR, nullable=False),
         sa.Column("vlan", sa.Integer),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
@@ -65,12 +77,19 @@ def upgrade() -> None:
     op.create_table(
         "endpoint_history",
         sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("endpoint_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("endpoints.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "endpoint_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("endpoints.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("ts", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("change", sa.String(16), nullable=False),
         sa.Column("old", postgresql.JSONB),
         sa.Column("new", postgresql.JSONB),
-        sa.CheckConstraint("change IN ('appeared','moved','ip_changed','vlan_changed','disappeared')", name="ck_hist_change"),
+        sa.CheckConstraint(
+            "change IN ('appeared','moved','ip_changed','vlan_changed','disappeared')", name="ck_hist_change"
+        ),
     )
     op.create_index("ix_endpoint_history_endpoint_id", "endpoint_history", ["endpoint_id"])
     op.create_index("ix_endpoint_history_ts", "endpoint_history", ["ts"])

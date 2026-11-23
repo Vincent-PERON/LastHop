@@ -42,7 +42,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.CheckConstraint("kind IN ('oidc','ldap')", name="ck_authprov_kind"),
-        sa.CheckConstraint("default_role IS NULL OR default_role IN ('viewer','operator')", name="ck_authprov_default_role"),
+        sa.CheckConstraint(
+            "default_role IS NULL OR default_role IN ('viewer','operator')", name="ck_authprov_default_role"
+        ),
     )
 
 

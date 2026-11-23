@@ -28,8 +28,12 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.CheckConstraint("auth_type IN ('password','key')", name="ck_ssh_auth_type"),
     )
-    op.add_column("devices", sa.Column("ssh_credential_id", postgresql.UUID(as_uuid=True),
-                                       sa.ForeignKey("ssh_credentials.id", ondelete="SET NULL")))
+    op.add_column(
+        "devices",
+        sa.Column(
+            "ssh_credential_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("ssh_credentials.id", ondelete="SET NULL")
+        ),
+    )
     op.add_column("devices", sa.Column("ssh_port", sa.Integer, nullable=False, server_default="22"))
     op.add_column("devices", sa.Column("ssh_allow_legacy", sa.Boolean, nullable=False, server_default="false"))
     op.add_column("devices", sa.Column("ssh_host_key", sa.Text))
@@ -59,7 +63,9 @@ def upgrade() -> None:
     op.create_table(
         "backup_events",
         sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("run_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("backup_runs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "run_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("backup_runs.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("ts", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("clock_timestamp()")),
         sa.Column("level", sa.String(8), nullable=False),
         sa.Column("message", sa.Text, nullable=False),
@@ -83,7 +89,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.CheckConstraint("kind IN ('running','startup')", name="ck_cfg_kind"),
         sa.CheckConstraint("status IN ('success','unchanged')", name="ck_cfg_status"),
-        sa.CheckConstraint("(status = 'success' AND content_blob IS NOT NULL) OR status = 'unchanged'", name="ck_cfg_blob"),
+        sa.CheckConstraint(
+            "(status = 'success' AND content_blob IS NOT NULL) OR status = 'unchanged'", name="ck_cfg_blob"
+        ),
     )
     op.create_index("ix_config_backups_device_id", "config_backups", ["device_id"])
     op.create_index("ix_config_backups_created_at", "config_backups", ["created_at"])
