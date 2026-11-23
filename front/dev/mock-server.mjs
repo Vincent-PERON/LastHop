@@ -6,7 +6,7 @@ const ROLE = process.env.MOCK_ROLE || 'admin'
 const PERMS = {
   viewer: ['search', 'topology:read'],
   operator: ['search', 'topology:read', 'realtime', 'export'],
-  admin: ['inventory:read', 'inventory:write', 'credentials:write', 'backups:read', 'backups:run', 'tokens:manage', 'topology:read', 'search', 'realtime', 'export', 'audit:read', 'settings:write', 'users:read'],
+  admin: ['inventory:read', 'inventory:write', 'credentials:write', 'backups:read', 'backups:run', 'tokens:manage', 'auth:manage', 'topology:read', 'search', 'realtime', 'export', 'audit:read', 'settings:write', 'users:read'],
 }[ROLE]
 
 const sites = [{ id: 's1', name: 'Siège' }]
@@ -77,12 +77,60 @@ function scenario(query) {
     ['done', { ok: true }]]
 }
 
+let loggedIn = process.env.MOCK_LOGGED === '1'
+let mustChange = process.env.MOCK_MUST_CHANGE === '1'
+let m0
+const authProviders = [
+  { id: 'ap1', kind: 'oidc', preset: 'keycloak', name: 'Keycloak', enabled: true, config: { issuer: 'https://keycloak.example.org/realms/lasthop', client_id: 'lasthop', scopes: 'openid profile email', groups_claim: 'groups', allowed_domains: [], require_email_verified: false, required_acr: null }, has_secret: true, role_map: { 'lasthop-operators': 'operator' }, default_role: 'viewer', redirect_uri: 'http://127.0.0.1:5173/api/v1/auth/oidc/callback' },
+  { id: 'ap2', kind: 'ldap', preset: 'ad', name: 'Active Directory', enabled: true, config: { url: 'ldaps://ad.corp.example:636', starttls: false, insecure: false, ca_pem: null, bind_dn: 'CN=svc,DC=corp,DC=example', bind_dn_template: null, user_base: 'DC=corp,DC=example', user_filter: '(sAMAccountName={username})', uid_attr: 'objectGUID', display_attr: 'displayName', mail_attr: 'mail', group_attr: 'memberOf', group_base: null, group_filter: '(member={user_dn})' }, has_secret: true, role_map: { 'CN=NetOps,OU=Groups,DC=corp,DC=example': 'operator' }, default_role: null, redirect_uri: null },
+]
+async function readJson(req) {
+  let raw = ''
+  for await (const chunk of req) raw += chunk
+  try { return JSON.parse(raw || '{}') } catch { return {} }
+}
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x')
   const p = url.pathname
   const q = url.searchParams
-  if (p === '/api/v1/auth/me') return send(res, 200, { user_id: 'u1', label: `demo.${ROLE}@example.org`, role: ROLE, permissions: PERMS, csrf_token: 'mock-csrf' })
-  if (p === '/api/v1/auth/logout') return send(res, 200, { status: 'logged_out' })
+  // --- authentification factice : démarre déconnecté (MOCK_LOGGED=1 pour démarrer connecté ; MOCK_MUST_CHANGE=1 : mot de passe à changer)
+  if (p === '/api/v1/auth/providers') return send(res, 200, { local: true, providers: authProviders.filter((x) => x.enabled).map(({ id, name, kind, preset }) => ({ id, name, kind, preset })) })
+  if (p === '/api/v1/auth/local/login' && req.method === 'POST') {
+    const b = await readJson(req)
+    if (b.password !== 'demo-password-1') return send(res, 401, { detail: 'Authentification refusée' })
+    loggedIn = true
+    return send(res, 200, { status: 'ok', must_change_password: mustChange })
+  }
+  if (p.match(/^\/api\/v1\/auth\/ldap\/[\w-]+\/login$/) && req.method === 'POST') {
+    const b = await readJson(req)
+    if (b.password !== 'demo-password-1') return send(res, 401, { detail: 'Authentification refusée' })
+    loggedIn = true
+    return send(res, 200, { status: 'ok', role: 'viewer' })
+  }
+  if (p === '/api/v1/auth/password' && req.method === 'POST') {
+    const b = await readJson(req)
+    if (b.current_password !== 'demo-password-1') return send(res, 403, { detail: 'Mot de passe actuel incorrect' })
+    if ((b.new_password || '').length < 12) return send(res, 422, { detail: 'Le mot de passe doit contenir entre 12 et 128 caractères.' })
+    mustChange = false
+    return send(res, 200, { status: 'ok', csrf_token: 'mock-csrf-2' })
+  }
+  if (p === '/api/v1/auth/me') return loggedIn ? send(res, 200, { user_id: 'u1', label: `demo.${ROLE}@example.org`, role: ROLE, permissions: PERMS, csrf_token: 'mock-csrf', auth_source: ROLE === 'admin' ? 'local' : 'oidc', must_change_password: mustChange }) : send(res, 401, { detail: 'Authentification requise' })
+  if (p === '/api/v1/auth/logout') { loggedIn = false; return send(res, 200, { status: 'logged_out' }) }
+  if (p === '/api/v1/auth-providers' && req.method === 'GET') return send(res, 200, authProviders)
+  if (p === '/api/v1/auth-providers' && req.method === 'POST') {
+    const b = await readJson(req)
+    const row = { id: `ap${authProviders.length + 1}`, kind: b.kind, preset: b.preset, name: b.name, enabled: Boolean(b.enabled), config: b.config, has_secret: Boolean(b.secret), role_map: b.role_map || {}, default_role: b.default_role || null, redirect_uri: b.kind === 'oidc' ? 'http://127.0.0.1:5173/api/v1/auth/oidc/callback' : null }
+    authProviders.push(row)
+    return send(res, 201, row)
+  }
+  if ((m0 = p.match(/^\/api\/v1\/auth-providers\/([\w-]+)(\/test)?$/))) {
+    const row = authProviders.find((x) => x.id === m0[1])
+    if (!row) return send(res, 404, { detail: 'Introuvable' })
+    if (m0[2]) return send(res, 200, { ok: row.kind === 'oidc', message: row.kind === 'oidc' ? 'Découverte OIDC réussie (démo) ; clés de signature récupérées.' : 'Annuaire injoignable, ou négociation TLS impossible (démo).' })
+    if (req.method === 'DELETE') { authProviders.splice(authProviders.indexOf(row), 1); res.writeHead(204); return res.end() }
+    if (req.method === 'PUT') { const b = await readJson(req); Object.assign(row, { ...(b.name ? { name: b.name } : {}), ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.config ? { config: b.config } : {}), ...(b.role_map ? { role_map: b.role_map } : {}), has_secret: row.has_secret || Boolean(b.secret) }); return send(res, 200, row) }
+  }
   if (p === '/api/v1/sites') return send(res, 200, sites)
   if (p === '/api/v1/devices' && req.method === 'GET') return send(res, 200, devices)
   let m

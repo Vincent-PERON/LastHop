@@ -16,7 +16,7 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["https://localhost:8443/api/v1/auth/callback"],
+      "redirectUris": ["https://localhost:8443/api/v1/auth/oidc/callback"],
       "webOrigins": [],
       "attributes": {"pkce.code.challenge.method": "S256"},
       "defaultClientScopes": ["openid", "profile", "email"],

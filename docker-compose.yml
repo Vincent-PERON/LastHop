@@ -1,4 +1,4 @@
-# LastHop — déploiement. Prérequis : ./scripts/gen-secrets.sh, écrire secrets/oidc_client_secret, copier .env.example en .env.
+# LastHop — déploiement. Prérequis : ./scripts/gen-secrets.sh (génère aussi le mot de passe initial du super admin local), copier .env.example en .env.
 name: lasthop
 
 x-hardened: &hardened
@@ -11,17 +11,10 @@ x-hardened: &hardened
 x-app-env: &app-env
   LASTHOP_ENV: ${LASTHOP_ENV:-prod}
   LASTHOP_FRONTEND_ORIGIN: ${LASTHOP_FRONTEND_ORIGIN:?}
-  LASTHOP_OIDC_ISSUER: ${LASTHOP_OIDC_ISSUER:?}
-  LASTHOP_OIDC_CLIENT_ID: ${LASTHOP_OIDC_CLIENT_ID:-lasthop}
-  LASTHOP_OIDC_REDIRECT_URI: ${LASTHOP_OIDC_REDIRECT_URI:?}
-  LASTHOP_OIDC_ADMIN_GROUPS: ${LASTHOP_OIDC_ADMIN_GROUPS:-["lasthop-admins"]}
-  LASTHOP_OIDC_OPERATOR_GROUPS: ${LASTHOP_OIDC_OPERATOR_GROUPS:-["lasthop-operators"]}
-  LASTHOP_OIDC_VIEWER_GROUPS: ${LASTHOP_OIDC_VIEWER_GROUPS:-["lasthop-viewers"]}
   LASTHOP_DB_HOST: postgres
   LASTHOP_DB_PASSWORD_FILE: /run/secrets/db_app_password
   LASTHOP_REDIS_HOST: redis
   LASTHOP_REDIS_PASSWORD_FILE: /run/secrets/redis_password
-  LASTHOP_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
   LASTHOP_MASTER_KEYS_FILE: /run/secrets/master_keys.json
   FORWARDED_ALLOW_IPS: ${LASTHOP_FORWARDED_ALLOW_IPS:-172.30.0.0/24}
 
@@ -53,14 +46,18 @@ services:
   api:
     build: {context: ./backend, target: runtime}
     <<: *hardened
-    environment: *app-env
-    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    environment:
+      <<: *app-env
+      # Super admin local : créé au premier démarrage s'il n'existe pas (changement de mot de passe imposé à la 1re connexion)
+      LASTHOP_LOCAL_ADMIN_USERNAME: ${LASTHOP_LOCAL_ADMIN_USERNAME:-admin}
+      LASTHOP_LOCAL_ADMIN_PASSWORD_FILE: /run/secrets/local_admin_password
+    secrets: [db_app_password, redis_password, master_keys.json, local_admin_password]
     tmpfs: [/tmp]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
-    networks: [edge, backend]   # edge : sortie vers l'IdP OIDC ; AUCUN accès au réseau SNMP
+    networks: [edge, backend]   # edge : sortie vers les fournisseurs d'identité (OIDC, LDAP) ; AUCUN accès au réseau SNMP
     deploy: {resources: {limits: {cpus: "2", memory: 1g}}}
 
   migrate:
@@ -80,7 +77,7 @@ services:
     <<: *hardened
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--without-gossip", "--without-mingle", "-Q", "celery"]
     environment: *app-env
-    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    secrets: [db_app_password, redis_password, master_keys.json]
     tmpfs: [/tmp]
     depends_on: {redis: {condition: service_healthy}, migrate: {condition: service_completed_successfully}}
     networks: [backend, snmp]   # seul service ayant accès aux équipements (UDP/161)
@@ -92,7 +89,7 @@ services:
     <<: *hardened
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--without-gossip", "--without-mingle", "-Q", "realtime", "-n", "rt@%h", "--concurrency=4"]
     environment: *app-env
-    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    secrets: [db_app_password, redis_password, master_keys.json]
     tmpfs: [/tmp]
     depends_on: {redis: {condition: service_healthy}, migrate: {condition: service_completed_successfully}}
     networks: [backend, snmp]
@@ -103,7 +100,7 @@ services:
     <<: *hardened
     command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=INFO", "-s", "/tmp/celerybeat-schedule"]
     environment: *app-env
-    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    secrets: [db_app_password, redis_password, master_keys.json]
     tmpfs: [/tmp]
     depends_on: {redis: {condition: service_healthy}}
     networks: [backend]
@@ -156,5 +153,5 @@ secrets:
   db_app_password: {file: ./secrets/db_app_password}
   redis_password: {file: ./secrets/redis_password}
   redis_users.acl: {file: ./secrets/redis_users.acl}
-  oidc_client_secret: {file: ./secrets/oidc_client_secret}
+  local_admin_password: {file: ./secrets/local_admin_password}
   master_keys.json: {file: ./secrets/master_keys.json}

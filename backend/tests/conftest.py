@@ -23,6 +23,9 @@ from app.main import create_app
 ISSUER = "https://idp.test/realms/lasthop"
 ORIGIN = "https://lasthop.test"
 CLIENT_ID = "lasthop"
+ADMIN_USER = "admin"
+ADMIN_PASSWORD = "Adm1n-Test-Passphrase-42"  # compte super admin local des tests (jetable)
+OIDC_PROVIDER_NAME = "test-oidc"
 
 
 class FakeIdP:
@@ -88,10 +91,9 @@ def settings() -> Settings:
     return Settings(
         env="dev",
         frontend_origin=ORIGIN,
-        oidc_issuer=ISSUER,
-        oidc_client_id=CLIENT_ID,
-        oidc_client_secret="test-client-secret",
-        oidc_redirect_uri=ORIGIN + "/api/v1/auth/callback",
+        local_admin_username=ADMIN_USER,
+        local_admin_password=ADMIN_PASSWORD,
+        local_admin_must_change=False,
         max_body_bytes=4096,
     )
 
@@ -120,7 +122,10 @@ async def client(app: Any) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app, client=(ip, 5000))
     async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as c:
         yield c
-    # nettoyage : les utilisateurs (et leurs tokens, en cascade) créés par le test
+    # nettoyage : compteurs de limitation (le compte local de référence, lui, persiste d'un test à l'autre)
+    async for k in app.state.redis.scan_iter(match="rl:*"):
+        await app.state.redis.delete(k)
+    # nettoyage : les utilisateurs et leurs tokens créés par le test
     async for s in dbsession.get_session():
         for table in (
             "endpoint_history",
@@ -135,24 +140,141 @@ async def client(app: Any) -> AsyncIterator[httpx.AsyncClient]:
             "sites",
         ):
             await s.execute(text(f"DELETE FROM {table}"))  # noqa: S608 - noms constants
-        await s.execute(text("DELETE FROM users WHERE issuer = :i"), {"i": ISSUER})
+        await s.execute(text("DELETE FROM api_tokens"))
+        await s.execute(text("DELETE FROM auth_providers"))
+        await s.execute(
+            text("DELETE FROM users WHERE issuer = :i OR issuer LIKE 'ldap:%' OR (issuer = 'local' AND sub <> :a)"),
+            {"i": ISSUER, "a": ADMIN_USER},
+        )
+        await s.execute(  # le compte local de référence est conservé : seuls ses compteurs sont remis à zéro
+            text(
+                "UPDATE users SET failed_login_count = 0, locked_until = NULL, is_active = true WHERE issuer = 'local'"
+            )
+        )
         await s.execute(text("DELETE FROM app_settings"))
         await s.commit()
 
 
-async def login(client: httpx.AsyncClient, idp: FakeIdP, groups: list[str] | None, **over: Any) -> httpx.Response:
-    r = await client.get("/api/v1/auth/login", params={"next": "/devices"})
+def _keyring():  # type: ignore[no-untyped-def]
+    from app.security.crypto import keyring_from_settings
+
+    s = Settings(env="dev", frontend_origin=ORIGIN)
+    return keyring_from_settings(s.master_keys, s.master_key_active)
+
+
+async def make_provider(  # type: ignore[no-untyped-def]
+    name: str = OIDC_PROVIDER_NAME,
+    *,
+    kind: str = "oidc",
+    preset: str = "generic",
+    config: dict[str, Any] | None = None,
+    secret: str | None = "test-client-secret",  # noqa: S107
+    role_map: dict[str, str] | None = None,
+    default_role: str | None = None,
+    enabled: bool = True,
+) -> str:
+    """Insère un fournisseur d'identité de test (secret chiffré comme en production) et retourne son identifiant."""
+    import json
+
+    from app.services.auth_providers import seal_secret
+
+    pid = uuid.uuid4()
+    cfg = (
+        config
+        if config is not None
+        else {
+            "issuer": ISSUER,
+            "client_id": CLIENT_ID,
+            "scopes": "openid profile email",
+            "groups_claim": "groups",
+            "allowed_domains": [],
+            "require_email_verified": False,
+            "required_acr": None,
+        }
+    )
+    blob, kid = seal_secret(_keyring(), pid, secret) if secret else (None, None)
+    roles = role_map if role_map is not None else {"lasthop-operators": "operator", "lasthop-viewers": "viewer"}
+    async for s in dbsession.get_session():
+        await s.execute(
+            text(
+                "INSERT INTO auth_providers(id, kind, preset, name, enabled, config, secret_blob, key_id, role_map,"
+                " default_role) VALUES (:i, :k, :p, :n, :e, CAST(:c AS jsonb), :b, :kid, CAST(:r AS jsonb), :d)"
+            ),
+            {
+                "i": pid,
+                "k": kind,
+                "p": preset,
+                "n": name,
+                "e": enabled,
+                "c": json.dumps(cfg),
+                "b": blob,
+                "kid": kid,
+                "r": json.dumps(roles),
+                "d": default_role,
+            },
+        )
+        await s.commit()
+    return str(pid)
+
+
+async def oidc_provider_id(name: str = OIDC_PROVIDER_NAME) -> str:
+    """Identifiant du fournisseur OIDC de test (créé à la demande)."""
+    async for s in dbsession.get_session():
+        row = (await s.execute(text("SELECT id FROM auth_providers WHERE name = :n"), {"n": name})).scalar_one_or_none()
+        if row is not None:
+            return str(row)
+    return await make_provider(name)
+
+
+async def login(
+    client: httpx.AsyncClient, idp: FakeIdP, groups: list[str] | None, provider: str | None = None, **over: Any
+) -> httpx.Response:
+    pid = provider or await oidc_provider_id()
+    r = await client.get(f"/api/v1/auth/oidc/{pid}/login", params={"next": "/devices"})
     assert r.status_code == 302, r.text
     q = parse_qs(urlparse(r.headers["location"]).query)
     idp.next_claims = idp.claims(q["nonce"][0], groups=groups, **over)
-    return await client.get("/api/v1/auth/callback", params={"code": "abc", "state": q["state"][0]})
+    return await client.get("/api/v1/auth/oidc/callback", params={"code": "abc", "state": q["state"][0]})
+
+
+async def local_login(
+    client: httpx.AsyncClient, username: str = ADMIN_USER, password: str = ADMIN_PASSWORD
+) -> httpx.Response:
+    return await client.post(
+        "/api/v1/auth/local/login",
+        json={"username": username, "password": password},
+        headers={"Origin": ORIGIN},
+    )
+
+
+async def make_local_user(username: str, password: str, *, role: str = "admin", must_change: bool = False) -> None:
+    from app.security.passwords import hash_password
+
+    h = await hash_password(password)
+    async for s in dbsession.get_session():
+        await s.execute(
+            text(
+                "INSERT INTO users(id, issuer, sub, role, display_name, password_hash, must_change_password)"
+                " VALUES (gen_random_uuid(), 'local', :u, CAST(:r AS user_role), :u, :h, :m)"
+            ),
+            {"u": username, "r": role, "h": h, "m": must_change},
+        )
+        await s.commit()
 
 
 @pytest.fixture
 def as_role(client: httpx.AsyncClient, idp: FakeIdP):  # type: ignore[no-untyped-def]
+    """Ouvre une session du rôle voulu : « lasthop-admins » = compte super admin LOCAL ; sinon connexion OIDC avec ce groupe
+    (un compte fédéré ne peut jamais être super admin)."""
+
     async def _do(group: str) -> httpx.AsyncClient:
-        r = await login(client, idp, [group])
-        assert r.status_code == 302, r.text
+        client.cookies.clear()
+        if group == "lasthop-admins":
+            r = await local_login(client)
+            assert r.status_code == 200, r.text
+        else:
+            r = await login(client, idp, [group])
+            assert r.status_code == 302, r.text
         me = (await client.get("/api/v1/auth/me")).json()
         client.headers["Origin"] = ORIGIN
         client.headers["X-CSRF-Token"] = me["csrf_token"]

@@ -36,6 +36,22 @@ services:
   sshsim:
     build: ./tests-infra/sshsim
     networks: [t]
+  ldap-certs:
+    image: alpine:3.24
+    command: ["sh", "-c", "apk add --no-cache openssl >/dev/null && sh /gen-certs.sh"]
+    volumes:
+      - ./tests-infra/ldap/gen-certs.sh:/gen-certs.sh:ro
+      - ldapcerts:/certs
+  ldap:   # annuaire LDAP de test (GLAuth) : ldap://:3893 (clair) et ldaps://:3894 (certificat de l'autorité de test)
+    image: glauth/glauth:v2.5.5
+    command: ["/app/glauth", "-c", "/etc/glauth/glauth.cfg"]
+    volumes:
+      - ./tests-infra/ldap/glauth.cfg:/etc/glauth/glauth.cfg:ro
+      - ldapcerts:/certs:ro
+    depends_on:
+      ldap-certs: {condition: service_completed_successfully}
+    networks:
+      t: {aliases: [ldap.lasthop.test]}
   worker:
     build: {context: ./backend, target: test}
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--without-gossip", "--without-mingle", "-Q", "celery,realtime"]
@@ -58,7 +74,10 @@ services:
       redis: {condition: service_healthy}
       snmpsim: {condition: service_started}
       sshsim: {condition: service_started}
+      ldap: {condition: service_started}
       worker: {condition: service_started}
+    volumes:
+      - ldapcerts:/ldap-certs:ro
     environment:
       COVERAGE_FILE: /tmp/.coverage
       LASTHOP_ENV: dev
@@ -75,6 +94,8 @@ networks:
   t: {}
   n2: {}
   n3: {}
+volumes:
+  ldapcerts: {}
 secrets:
   postgres_superuser_password: {file: ./secrets/postgres_superuser_password}
   db_owner_password: {file: ./secrets/db_owner_password}

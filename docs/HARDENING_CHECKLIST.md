@@ -33,10 +33,13 @@ Cocher chaque ligne avant la mise en production.
 - [ ] Front : `npm audit` à 0 en CI ; mises à jour via Renovate ; ne jamais ajouter `unsafe-inline` à la CSP (corriger la bibliothèque ou son usage).
 
 ## Identité
-- [ ] OIDC avec **MFA imposée côté IdP** (Keycloak : flux d'authentification ; Entra : accès conditionnel). Si l'IdP expose `acr`, renseigner `LASTHOP_OIDC_REQUIRED_ACR`.
-- [ ] Groupes IdP `lasthop-admins/operators/viewers` créés ; `lasthop-admins` = super admin (profils SNMP/SSH, sauvegardes, paramètres, audit, tokens) : membres réduits au strict minimum.
-- [ ] `redirect_uri` du client OIDC = URL exacte du callback ; PKCE S256 requis ; pas de flux implicite.
+- [ ] **Super admin local** : mot de passe initial changé à la première connexion ; `secrets/local_admin_password` supprimé de l'hôte ensuite ; accès à la page de connexion restreint par le réseau (VPN / liste d'adresses), le compte local n'ayant ni MFA ni limitation côté fournisseur.
+- [ ] Fournisseurs OIDC (Keycloak, Entra, Google) avec **MFA imposée côté fournisseur** ; URL de redirection exacte `https://<site>/api/v1/auth/oidc/callback` ; PKCE S256 ; pas de flux implicite ; ACR exigé si exposé (« Options avancées »).
+- [ ] Google Workspace : domaine(s) autorisé(s) renseigné(s) ; rôle par défaut `viewer` sauf besoin.
+- [ ] LDAP : `ldaps://` (ou StartTLS) avec autorité de certification fournie ; **aucune** connexion non chiffrée en production ; compte de service en lecture seule, mot de passe long ; base de recherche la plus étroite possible.
+- [ ] Groupes → rôles : seuls operator/viewer sont attribuables ; revue périodique des correspondances et des membres des groupes opérateurs.
 - [ ] Revue périodique des tokens d'API (`GET /api/v1/tokens?all=true`) ; durée de vie ≤ 90 jours.
+- [ ] Audit : surveiller `auth.login` en échec (rafales), `auth_provider.*` et `auth.password_change`.
 
 ## Secrets
 - [ ] `./scripts/gen-secrets.sh` exécuté sur l'hôte ; dossier `secrets/` en 0700 propriétaire root/déploiement, **hors sauvegarde non chiffrée**.

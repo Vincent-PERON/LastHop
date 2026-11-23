@@ -7,6 +7,16 @@ export function dt(iso) {
 // Libellés des rôles IdP ; « admin » est le super admin (seul à gérer profils, sauvegardes, paramètres, audit et tokens)
 export const USER_ROLE_LABEL = { admin: 'Super admin', operator: 'Opérateur', viewer: 'Lecteur' }
 
+// Fournisseurs d'identité : libellés et consignes (la sécurité vient du serveur, ceci n'est qu'une aide à la saisie)
+export const PRESETS = {
+  keycloak: { kind: 'oidc', label: 'Keycloak', issuer: 'https://keycloak.example.org/realms/lasthop', groups: true, hint: "Émetteur = URL du realm. Ajoutez au client un mapper « Group Membership » (nom du claim : groups, chemin complet désactivé)." },
+  entra: { kind: 'oidc', label: 'Microsoft Entra ID', issuer: 'https://login.microsoftonline.com/<tenant-id>/v2.0', groups: true, hint: "Émetteur = locataire unique (pas « common »). Configurez le claim « groups » dans l'inscription d'application : les groupes sont des identifiants d'objet (GUID). Au-delà de 200 groupes Entra n'envoie plus la liste : utilisez des groupes d'application ou le rôle par défaut." },
+  google: { kind: 'oidc', label: 'Google Workspace', issuer: 'https://accounts.google.com', groups: false, hint: "Google ne fournit pas les groupes : l'accès est limité à votre/vos domaine(s) Workspace (obligatoire) et tous reçoivent le rôle par défaut. Le domaine est contrôlé via le claim « hd »." },
+  generic: { kind: 'oidc', label: 'OIDC générique', issuer: 'https://idp.example.org/', groups: true, hint: '' },
+  ad: { kind: 'ldap', label: 'Active Directory (LDAP)', filter: '(sAMAccountName={username})', uid: 'objectGUID', display: 'displayName', hint: "Compte de service en lecture seule + base de recherche (ex. DC=corp,DC=local). Les groupes viennent de memberOf (DN complets)." },
+  ldap: { kind: 'ldap', label: 'LDAP / OpenLDAP / FreeIPA', filter: '(uid={username})', uid: 'entryUUID', display: 'cn', hint: '' },
+}
+
 export const RUN_STATUS = {
   running: ['en cours…', 'warn'],
   success: ['réussie', 'ok'],

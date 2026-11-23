@@ -42,17 +42,10 @@ class Settings(BaseSettings):
     redis_password_file: str | None = None
     redis_tls_ca_file: str | None = None
 
-    # --- OIDC
-    oidc_issuer: str = ""
-    oidc_client_id: str = "lasthop"
-    oidc_client_secret_file: str | None = None
-    oidc_redirect_uri: str = ""
-    oidc_scopes: str = "openid profile email"
-    oidc_groups_claim: str = "groups"
-    oidc_admin_groups: list[str] = Field(default_factory=lambda: ["lasthop-admins"])
-    oidc_operator_groups: list[str] = Field(default_factory=lambda: ["lasthop-operators"])
-    oidc_viewer_groups: list[str] = Field(default_factory=lambda: ["lasthop-viewers"])
-    oidc_required_acr: str | None = None  # ex. "mfa" si l'IdP l'expose (défense en profondeur)
+    # --- Compte super admin local (créé au premier démarrage s'il n'existe pas ; changement de mot de passe imposé)
+    local_admin_username: str = Field(default="admin", pattern=r"^[a-z][a-z0-9._-]{2,31}$")
+    local_admin_password_file: str | None = None
+    local_admin_must_change: bool = True
 
     # --- Sessions
     session_idle_seconds: int = Field(default=1800, ge=60)
@@ -67,7 +60,7 @@ class Settings(BaseSettings):
     # --- Valeurs dérivées des fichiers de secrets (non lues depuis l'env)
     db_password: str = Field(default="", exclude=True, repr=False)
     redis_password: str = Field(default="", exclude=True, repr=False)
-    oidc_client_secret: str = Field(default="", exclude=True, repr=False)
+    local_admin_password: str = Field(default="", exclude=True, repr=False)
     master_keys: dict[str, bytes] = Field(default_factory=dict, exclude=True, repr=False)
     master_key_active: str = ""
 
@@ -84,7 +77,7 @@ class Settings(BaseSettings):
     def _load_secrets(self) -> Settings:
         self.db_password = self.db_password or (_read_secret(self.db_password_file) or "")
         self.redis_password = self.redis_password or (_read_secret(self.redis_password_file) or "")
-        self.oidc_client_secret = self.oidc_client_secret or (_read_secret(self.oidc_client_secret_file) or "")
+        self.local_admin_password = self.local_admin_password or (_read_secret(self.local_admin_password_file) or "")
         if self.master_keys_file and not self.master_keys:
             import base64
 
@@ -96,8 +89,6 @@ class Settings(BaseSettings):
                 raise ValueError("Clé active absente du trousseau")
             self.master_keys, self.master_key_active = keys, data["active"]
         if self.env == "prod":
-            if not self.oidc_issuer.startswith("https://"):
-                raise ValueError("oidc_issuer doit être https:// en production")
             if self.frontend_origin.startswith("http://"):
                 raise ValueError("frontend_origin doit être https:// en production")
         return self

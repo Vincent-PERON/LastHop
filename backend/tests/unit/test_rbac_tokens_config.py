@@ -4,16 +4,18 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.db.models import Role
 from app.security import tokens as tok
-from app.security.rbac import TOKEN_SCOPES, Perm, role_from_groups, token_permissions
+from app.security.rbac import TOKEN_SCOPES, Perm, token_permissions
+from app.services.auth_providers import resolve_role
 from app.worker.celery_app import celery_app
 
 
 def test_role_mapping_highest_wins_and_default_deny() -> None:
-    a, o, v = ["adm"], ["ops"], ["view"]
-    assert role_from_groups(["view", "adm"], a, o, v) == Role.admin
-    assert role_from_groups(["view", "ops"], a, o, v) == Role.operator
-    assert role_from_groups(["other"], a, o, v) is None
-    assert role_from_groups([], a, o, v) is None
+    m = {"ops": "operator", "view": "viewer"}
+    assert resolve_role(m, None, ["view", "ops"]) == Role.operator
+    assert resolve_role(m, None, ["VIEW"]) == Role.viewer  # insensible à la casse
+    assert resolve_role(m, None, ["other"]) is None and resolve_role(m, None, []) is None
+    assert resolve_role(m, "viewer", ["other"]) == Role.viewer  # rôle par défaut du fournisseur
+    assert resolve_role({"adm": "admin"}, None, ["adm"]) is None  # « admin » n'est jamais attribuable par un groupe
 
 
 def test_token_permissions_capped_by_owner_role() -> None:
@@ -36,7 +38,7 @@ def test_cors_wildcard_and_http_prod_refused() -> None:
     with pytest.raises(ValidationError):
         Settings(env="dev", frontend_origin="*")
     with pytest.raises(ValidationError):
-        Settings(env="prod", frontend_origin="https://a.example", oidc_issuer="http://idp.example")
+        Settings(env="prod", frontend_origin="http://localhost")
 
 
 def test_celery_json_only_no_pickle() -> None:
@@ -51,6 +53,7 @@ def test_non_admin_roles_are_limited_to_search_and_topology() -> None:
     assert ROLE_PERMS[Role.operator] == {Perm.search, Perm.topology_read, Perm.realtime, Perm.export}
     for p in (
         Perm.tokens_manage,
+        Perm.auth_manage,
         Perm.backups_read,
         Perm.backups_run,
         Perm.credentials_write,

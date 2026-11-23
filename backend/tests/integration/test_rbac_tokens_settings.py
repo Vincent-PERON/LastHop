@@ -76,34 +76,27 @@ async def test_api_token_lifecycle_and_limits(client: httpx.AsyncClient, as_role
         assert (await bearer.get("/api/v1/auth/me", headers=auth)).status_code == 401
 
 
-async def test_token_cannot_exceed_owner_after_demotion_and_other_users_cannot_revoke(
-    client, idp, as_role, app
-) -> None:  # type: ignore[no-untyped-def]
-    from tests.conftest import login
-
+async def test_token_cannot_exceed_owner_after_demotion_and_other_users_cannot_revoke(client, as_role, app) -> None:  # type: ignore[no-untyped-def]
     await as_role("lasthop-admins")
     tok = (await client.post("/api/v1/tokens", json={"name": "rt", "scopes": ["read", "realtime"]})).json()
-    # rétrogradation de l'utilisateur côté IdP : le rôle est recalculé au prochain login
-    client.cookies.clear()
-    r = await login(client, idp, ["lasthop-viewers"], sub=(await _only_sub()))
-    assert r.status_code == 302
     transport = httpx.ASGITransport(app=app, client=("10.250.250.8", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://lasthop.test") as b:
-        me = await b.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {tok['token']}"})
-        assert me.json()["permissions"] == []  # les portées read/realtime n'existent plus pour un viewer
+        auth = {"Authorization": f"Bearer {tok['token']}"}
+        assert "inventory:read" in (await b.get("/api/v1/auth/me", headers=auth)).json()["permissions"]
+        # rétrogradation du propriétaire : les droits du token suivent immédiatement
+        async for s in dbsession.get_session():
+            await s.execute(text("UPDATE users SET role = 'viewer' WHERE issuer = 'local' AND sub = 'admin'"))
+            await s.commit()
+        try:
+            assert (await b.get("/api/v1/auth/me", headers=auth)).json()["permissions"] == []
+        finally:
+            async for s in dbsession.get_session():
+                await s.execute(text("UPDATE users SET role = 'admin' WHERE issuer = 'local' AND sub = 'admin'"))
+                await s.commit()
     # un autre utilisateur non super admin n'a aucun accès à la gestion des tokens
-    client.cookies.clear()
-    await login(client, idp, ["lasthop-viewers"])
-    me2 = (await client.get("/api/v1/auth/me")).json()
-    client.headers.update({"Origin": "https://lasthop.test", "X-CSRF-Token": me2["csrf_token"]})
+    await as_role("lasthop-viewers")
     assert (await client.delete(f"/api/v1/tokens/{tok['id']}")).status_code == 403
     assert (await client.get("/api/v1/tokens")).status_code == 403
-
-
-async def _only_sub() -> str:
-    async for s in dbsession.get_session():
-        return str((await s.execute(text("SELECT sub FROM users ORDER BY created_at LIMIT 1"))).scalar_one())
-    raise AssertionError
 
 
 async def test_viewer_and_operator_limited_to_search_and_topology(client: httpx.AsyncClient, as_role) -> None:  # type: ignore[no-untyped-def]

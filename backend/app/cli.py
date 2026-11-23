@@ -64,7 +64,28 @@ async def _oui_import(content: str) -> int:
     return 0
 
 
+async def _local_admin_reset(username: str, password: str) -> int:
+    """Secours : nouveau mot de passe du compte local (entrée standard), compte déverrouillé, changement imposé."""
+    from app.db.session import close_db, init_db
+    from app.security.passwords import PasswordPolicyError
+    from app.services.local_admin import reset_local_password
+
+    init_db(get_settings())
+    try:
+        ok = await reset_local_password(username, password)
+    except PasswordPolicyError as exc:
+        print(f"Mot de passe refusé : {exc}")
+        return 1
+    finally:
+        await close_db()
+    print("mot de passe réinitialisé (changement exigé à la prochaine connexion)" if ok else "compte local introuvable")
+    return 0 if ok else 1
+
+
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "local-admin-reset":
+        # echo -n 'nouveau-mot-de-passe' | docker compose run --rm -T api python -m app.cli local-admin-reset admin
+        sys.exit(asyncio.run(_local_admin_reset(sys.argv[2].lower(), sys.stdin.read().strip())))
     if sys.argv[1:] == ["audit-verify"]:
         sys.exit(asyncio.run(_audit_verify()))
     if sys.argv[1:] == ["reencrypt"]:
@@ -73,7 +94,7 @@ def main() -> None:
         import pathlib
 
         sys.exit(asyncio.run(_oui_import(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8", errors="replace"))))
-    print("usage: python -m app.cli audit-verify | reencrypt | oui-import <oui.csv>")
+    print("usage: python -m app.cli audit-verify | reencrypt | oui-import <oui.csv> | local-admin-reset <utilisateur>")
     sys.exit(2)
 
 

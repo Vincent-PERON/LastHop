@@ -11,7 +11,8 @@ mk postgres_superuser_password "$(rnd)"
 mk db_owner_password "$(rnd)"
 mk db_app_password "$(rnd)"
 mk redis_password "$(rnd)"
-[ -e "$d/oidc_client_secret" ] || { : > "$d/oidc_client_secret"; echo "à renseigner : secrets/oidc_client_secret"; }
+# Mot de passe INITIAL du super admin local : lu une seule fois à la création du compte, changement imposé à la 1re connexion
+[ -e "$d/local_admin_password" ] || { printf '%s' "$(rnd)" > "$d/local_admin_password"; echo "créé : secrets/local_admin_password (mot de passe initial du super admin local, à changer à la 1re connexion)"; }
 if [ ! -e "$d/master_keys.json" ]; then
   k="$(openssl rand -base64 32 | tr -d '\n')"
   printf '{"active":"k1","keys":{"k1":"%s"}}' "$k" > "$d/master_keys.json"

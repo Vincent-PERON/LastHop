@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from app.api import (
     audit,
     auth,
+    auth_providers,
     backups,
     credentials,
     devices,
@@ -33,9 +34,10 @@ from app.deps import get_principal
 from app.logging import configure_logging
 from app.redis_util import make_redis
 from app.security.middleware import SecurityMiddleware
-from app.security.oidc import OIDCClient
+from app.security.oidc import OidcRegistry
 from app.security.sessions import SessionStore
 from app.services.jobs import default_dispatch
+from app.services.local_admin import ensure_local_admin
 
 log = logging.getLogger("lasthop")
 
@@ -49,9 +51,10 @@ def create_app(settings: Settings | None = None, oidc_transport: httpx.AsyncBase
         init_db(s)
         app.state.redis = make_redis(s)
         http = httpx.AsyncClient(timeout=10.0, transport=oidc_transport, follow_redirects=False)
-        app.state.oidc = OIDCClient(s, http)
+        app.state.oidc = OidcRegistry(http)
         app.state.dispatch_job = default_dispatch
         app.state.sessions = SessionStore(app.state.redis, s.session_idle_seconds, s.session_absolute_seconds)
+        await ensure_local_admin(s)
         yield
         await http.aclose()
         await app.state.redis.aclose()
@@ -88,6 +91,7 @@ def create_app(settings: Settings | None = None, oidc_transport: httpx.AsyncBase
     for r in (
         health.router,
         auth.router,
+        auth_providers.router,
         tokens.router,
         audit.router,
         settings_api.router,

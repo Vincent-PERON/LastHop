@@ -185,6 +185,22 @@ Résiduel : le compte SSH doit pouvoir afficher la configuration complète (priv
 le masquage des secrets est un *au mieux* (expressions régulières) : le contenu brut chiffré reste la référence ; la clé maître est lisible par `api` et `worker` (comme pour SNMP) ;
 le parcours CLI (invite, pagination, commandes) a été validé contre des équipements simulés, **pas sur du matériel réel** : chaque famille/firmware peut avoir des particularités.
 
+## 3 octies. Authentification : compte local, OIDC multi-fournisseurs, LDAP
+
+| Menace | Mesure | Résiduel |
+|---|---|---|
+| Force brute / bourrage d'identifiants (compte local) | argon2id (64 Mio), limitation par IP (20/min), **verrouillage progressif** par compte (5 échecs → 15 min, x2 jusqu'à 1 h), réponse identique que le compte existe ou non (hash factice : temps constant) | Un attaquant peut verrouiller le compte admin (déni de service) : `local-admin-reset` en secours ; mot de passe seul (pas de MFA) — choix du propriétaire, à compenser par un accès réseau restreint |
+| Mot de passe initial connu | Généré aléatoirement (Docker secret), **changement imposé** : aucune autre route accessible avant ; sessions antérieures invalidées à chaque changement | Le fichier initial reste sur l'hôte tant qu'il n'est pas supprimé |
+| Élévation via un IdP/annuaire compromis ou mal configuré | Un compte fédéré **n'est jamais super admin** : les groupes n'attribuent que operator/viewer (validation + `CHECK` SQL) ; rôle recalculé à chaque connexion ; refus par défaut sans correspondance | Un IdP compromis peut obtenir operator (lecture de la topologie/localisation) |
+| Connexion Google ouverte à tout compte Google | Domaine Workspace obligatoire (claim `hd`, pas seulement l'e-mail), e-mail vérifié booléen exigé | |
+| Bind LDAP anonyme (mot de passe vide) | Mot de passe vide refusé avant tout appel ; nom d'utilisateur à jeu de caractères restreint ; valeurs échappées dans les filtres (testé : joker, injection) | |
+| Interception LDAP | LDAPS/StartTLS, TLS ≥ 1.2, certificat **et nom** vérifiés (testé contre un annuaire réel : autorité inconnue et nom erroné refusés) ; le mode non chiffré exige une reconnaissance explicite, signalé et audité | Mode non chiffré = mots de passe en clair sur le réseau (choix du propriétaire, laboratoire) |
+| Secrets de fournisseurs (client_secret, compte de service) | AES-GCM, clé hors base, AAD liée à la ligne ; jamais renvoyés (`has_secret`), jamais dans l'audit | |
+| SSRF via la configuration d'un fournisseur | Réservé au super admin ; hôtes refusés : boucle locale, link-local (métadonnées cloud), multicast ; https obligatoire en production pour OIDC ; messages d'erreur génériques | Les résolutions DNS vers des adresses internes ne sont pas filtrées |
+| Saisies hostiles dans l'identifiant | Validation (`[A-Za-z0-9._@-]`) avant la base ; libellés d'audit assainis (un NUL faisait échouer l'insertion : bug trouvé par les tests) | |
+| Épuisement de l'annuaire (verrouillage AD) | 10 échecs / 15 min par (fournisseur, identifiant) puis 429 | |
+Dépendance : `ldap3` (pure Python, sans vulnérabilité connue) n'est plus publié depuis 2021 : exposition limitée (appels sortants vers des annuaires configurés par le super admin, entrées échappées) ; à surveiller.
+
 ## 4. Menaces à traiter dans les lots suivants (déjà identifiées)
 
 - **b/d** XSS stocké via `ifAlias`/`sysName`/`ifDescr` → nettoyage à l'ingestion + échappement au rendu + CSP.
@@ -196,7 +212,7 @@ le parcours CLI (invite, pagination, commandes) a été validé contre des équi
 
 ## 5. Risques résiduels acceptés au lot (a)
 
-1. Le rôle utilisateur est relu depuis l'IdP au login seulement (la désactivation `is_active` est, elle, immédiate).
+1. Le rôle d'un utilisateur fédéré est recalculé à sa connexion seulement (la désactivation `is_active` est, elle, immédiate).
 2. Rate-limit par IP uniquement.
 3. TLS interne Postgres/Redis non déployé par défaut (réseau interne isolé).
 4. Un propriétaire de base (`lasthop_owner`) qui désactive les triggers peut altérer l'audit — la rupture est détectable par `audit_verify()` ; la parade complète est l'export syslog/SIEM (à brancher en production).

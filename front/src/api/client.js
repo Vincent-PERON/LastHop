@@ -34,7 +34,7 @@ export function qs(params) {
   return s ? `?${s}` : ''
 }
 
-export async function api(method, path, { body, params } = {}) {
+export async function api(method, path, { body, params, quiet401 = false } = {}) {
   const headers = { Accept: 'application/json' }
   const init = { method, headers, credentials: 'same-origin', redirect: 'manual' }
   if (method !== 'GET' && method !== 'HEAD') {
@@ -51,7 +51,7 @@ export async function api(method, path, { body, params } = {}) {
     throw new ApiError(0, 'Serveur injoignable.')
   }
   if (res.status === 401) {
-    onUnauthorized()
+    if (!quiet401) onUnauthorized()
     throw new ApiError(401, MESSAGES[401])
   }
   if (res.status === 204) return null
@@ -70,6 +70,6 @@ export async function api(method, path, { body, params } = {}) {
 }
 
 export const get = (path, params) => api('GET', path, { params })
-export const post = (path, body) => api('POST', path, { body })
+export const post = (path, body, opts) => api('POST', path, { body, ...opts })
 export const put = (path, body) => api('PUT', path, { body })
 export const del = (path) => api('DELETE', path)

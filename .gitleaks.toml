@@ -13,3 +13,10 @@ regexes = [
   '''test-ssh-password-1234''',
   '''^snmp_[a-z0-9_]+$''',   # nom d'un réglage dans une requête SQL de test (WHERE key='snmp_…')
 ]
+
+# Mots de passe jetables des jeux de tests (compte local de test, annuaire de test…). Limité à la règle générique et aux
+# dossiers de tests : les clés/jetons identifiables (AWS, GitHub, clés privées…) restent détectés partout, tests compris.
+[[allowlists]]
+description = "mots de passe jetables des tests"
+targetRules = ["generic-api-key"]
+paths = ['''backend/tests/''', '''front/tests/''', '''tests-infra/''']

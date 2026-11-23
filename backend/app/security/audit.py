@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from typing import Any
 
 from fastapi import Request
@@ -20,6 +21,15 @@ def client_ip(request: Request) -> str | None:
         return str(ipaddress.ip_address(host)) if host else None
     except ValueError:
         return None
+
+
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def clean_label(value: str | None) -> str | None:
+    """Libellé d'acteur issu d'une saisie non fiable (identifiant) : sans caractère de contrôle (un NUL fait
+    échouer l'insertion PostgreSQL, un retour ligne falsifierait les journaux), borné à 320 caractères."""
+    return _CONTROL.sub("?", value)[:320] if value is not None else None
 
 
 async def record(
@@ -41,7 +51,7 @@ async def record(
         insert(AuditLog).values(
             actor_type=actor_type or (principal.actor_type if principal else "anonymous"),
             actor_id=principal.actor_id if principal else None,
-            actor_label=(principal.label if principal else actor_label),
+            actor_label=clean_label(principal.label if principal else actor_label),
             action=action,
             outcome=outcome,
             target_type=target_type,

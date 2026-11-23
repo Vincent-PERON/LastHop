@@ -1,7 +1,8 @@
 # Surcharge de DÉVELOPPEMENT : ajoute un Keycloak local. NON verrouillé, ne jamais utiliser en production.
 # Usage : docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-# Variables à définir dans .env : LASTHOP_ENV=dev, LASTHOP_OIDC_ISSUER=http://localhost:8180/realms/lasthop,
-#   KC_BOOTSTRAP_ADMIN_PASSWORD, KC_DEV_USER_PASSWORD, et secrets/oidc_client_secret = valeur de KC_CLIENT_SECRET.
+# Variables à définir dans .env : LASTHOP_ENV=dev, KC_BOOTSTRAP_ADMIN_PASSWORD, KC_CLIENT_SECRET, KC_DEV_USER_PASSWORD.
+# Puis, connecté en super admin local, ajouter un fournisseur « Keycloak » dans la page Authentification :
+#   émetteur http://keycloak:8180/realms/lasthop, client_id lasthop, secret = valeur de KC_CLIENT_SECRET.
 # NB : l'issuer doit être joignable à la fois par le navigateur ET par le conteneur api (ajouter "127.0.0.1 keycloak"
 # dans /etc/hosts et utiliser http://keycloak:8180/... comme issuer). Non vérifié de bout en bout : voir README.
 services:

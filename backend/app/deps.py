@@ -21,6 +21,8 @@ from app.security.sessions import COOKIE_NAME, SessionStore, session_hash
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 DbSession = Annotated[AsyncSession, Depends(get_session)]
 
+PASSWORD_CHANGE_ALLOWED = {"/api/v1/auth/me", "/api/v1/auth/logout", "/api/v1/auth/password"}
+
 UNAUTH = HTTPException(401, "Authentification requise", headers={"WWW-Authenticate": "Bearer"})
 
 
@@ -84,8 +86,18 @@ async def get_principal(request: Request, db: DbSession) -> Principal:
     if user is None or not user.is_active:
         await store.destroy(sid)
         raise UNAUTH
+    # Changement de mot de passe : toutes les sessions ouvertes avant sont invalides
+    if user.password_changed_at is not None and data.created < user.password_changed_at.timestamp():
+        await store.destroy(sid)
+        raise UNAUTH
     if request.method not in SAFE_METHODS:
         _check_origin_and_csrf(request, data.csrf)
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_ALLOWED:
+        # Mot de passe initial/réinitialisé : rien d'autre n'est accessible tant qu'il n'a pas été changé
+        raise HTTPException(
+            403, "Changement de mot de passe requis", headers={"X-Error-Code": "PASSWORD_CHANGE_REQUIRED"}
+        )
+    source = "local" if user.issuer == "local" else ("ldap" if user.issuer.startswith("ldap:") else "oidc")
     return Principal(
         kind="user",
         user_id=user.id,
@@ -94,6 +106,8 @@ async def get_principal(request: Request, db: DbSession) -> Principal:
         permissions=ROLE_PERMS[user.role],
         session_hash=session_hash(sid),
         csrf=data.csrf,
+        auth_source=source,
+        must_change_password=user.must_change_password,
     )
 
 

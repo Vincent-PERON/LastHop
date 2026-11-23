@@ -22,6 +22,7 @@ class Perm(enum.StrEnum):
     users_read = "users:read"
     backups_read = "backups:read"  # contenu des configurations : très sensible, administrateurs seulement
     backups_run = "backups:run"
+    auth_manage = "auth:manage"  # fournisseurs d'identité (OIDC, LDAP) : super admin uniquement
     tokens_manage = "tokens:manage"  # création / liste / révocation des tokens d'API : super admin uniquement
 
 
@@ -62,6 +63,8 @@ class Principal:
     csrf: str | None = None
     token_id: uuid.UUID | None = None
     scopes: list[str] = field(default_factory=list)
+    auth_source: str = "token"  # local | oidc | ldap | token
+    must_change_password: bool = False
 
     @property
     def actor_type(self) -> str:
@@ -70,15 +73,3 @@ class Principal:
     @property
     def actor_id(self) -> str:
         return str(self.token_id if self.kind == "token" and self.token_id else self.user_id)
-
-
-def role_from_groups(groups: list[str], admin: list[str], operator: list[str], viewer: list[str]) -> Role | None:
-    """Rôle le plus élevé parmi les groupes IdP ; `None` si aucun groupe mappé (refus par défaut)."""
-    gs = set(groups)
-    if gs & set(admin):
-        return Role.admin
-    if gs & set(operator):
-        return Role.operator
-    if gs & set(viewer):
-        return Role.viewer
-    return None

@@ -48,6 +48,42 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Compte local (issuer = "local") uniquement : hash argon2id, verrouillage progressif, changement imposé
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+LOCAL_ISSUER = "local"
+
+
+class AuthProvider(Base):
+    """Fournisseur d'identité configuré dans l'interface : OIDC (Keycloak, Entra ID, Google Workspace…) ou LDAP direct.
+    Le secret (client_secret OIDC / mot de passe LDAP de service) est chiffré AES-GCM, lié à la ligne par l'AAD."""
+
+    __tablename__ = "auth_providers"
+    __table_args__ = (
+        CheckConstraint("kind IN ('oidc','ldap')", name="ck_authprov_kind"),
+        CheckConstraint(
+            "default_role IS NULL OR default_role IN ('viewer','operator')", name="ck_authprov_default_role"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(8))
+    preset: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    secret_blob: Mapped[bytes | None] = mapped_column(LargeBinary)
+    key_id: Mapped[str | None] = mapped_column(String(64))
+    role_map: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict)
+    default_role: Mapped[str | None] = mapped_column(String(16))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ApiToken(Base):
