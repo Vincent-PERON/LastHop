@@ -1,0 +1,5 @@
+# Certificat fourni (PKI interne ou autorité commerciale) : fullchain.pem (certificat + intermédiaires) et privkey.pem
+# placés dans proxy/certs/ (voir README). Aucune requête ACME n'est émise.
+tls /certs/fullchain.pem /certs/privkey.pem {
+	protocols tls1.2 tls1.3
+}

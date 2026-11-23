@@ -3,9 +3,8 @@
 }
 
 {$SITE_ADDRESS} {
-	tls {
-		protocols tls1.2 tls1.3
-	}
+	# Certificat : Let's Encrypt automatique (défaut) ou certificat fourni, selon le fichier monté (voir README)
+	import /etc/caddy/tls.caddy
 
 	header {
 		Strict-Transport-Security "max-age=63072000; includeSubDomains"

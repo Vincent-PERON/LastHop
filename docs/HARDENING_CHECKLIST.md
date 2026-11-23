@@ -6,7 +6,7 @@ Cocher chaque ligne avant la mise en production.
 - [ ] Hôte à jour, accès SSH par clé, Docker non exposé sur TCP.
 - [ ] Pare-feu hôte : entrant 80/443 uniquement (depuis les réseaux d'administration si possible) ; **aucun** port 5432/6379 publié.
 - [ ] Pare-feu hôte : sortant du conteneur `worker` limité à UDP/161 vers les IP des équipements + DNS ; sortant de `api` limité à l'IdP (HTTPS).
-- [ ] Sur chaque équipement : SNMPv3 authPriv, compte lecture seule, **ACL source = IP de l'hôte LastHop** (voir README, exemples au lot b).
+- [ ] Sur chaque équipement : SNMPv3 authPriv, compte lecture seule, **ACL source = IP de l'hôte LastHop** (voir docs/SWITCH_SNMPV3.md).
 
 - [ ] `snmp_allowed_cidrs` renseigné avec les seuls réseaux de management (jamais `0.0.0.0/0`, refusé) ; `snmp_v2c_enabled` laissé à `false` sauf nécessité.
 - [ ] Profils SNMP : SHA-256+/AES, `allow_legacy_algos` uniquement pour les équipements qui ne supportent pas mieux (revue trimestrielle des profils `legacy`).

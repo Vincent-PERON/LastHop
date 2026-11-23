@@ -1,0 +1,5 @@
+# Certificat obtenu et renouvelé automatiquement (ACME / Let's Encrypt).
+# Prérequis : SITE_ADDRESS = nom DNS public, ports 80 et 443 joignables depuis Internet.
+tls {
+	protocols tls1.2 tls1.3
+}
