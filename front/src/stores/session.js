@@ -1,7 +1,7 @@
 // État de session minimal, conservé en mémoire uniquement (aucun stockage navigateur).
 import { reactive } from 'vue'
 
-export const session = reactive({ loaded: false, user: null, csrf: null, permissions: [], mustChange: false })
+export const session = reactive({ loaded: false, user: null, csrf: null, permissions: [], mustChange: false, totp: false })
 
 export function can(perm) {
   return session.permissions.includes(perm)
@@ -10,6 +10,7 @@ export function can(perm) {
 export function setMe(me) {
   session.user = { id: me.user_id, label: me.label, role: me.role, source: me.auth_source || 'oidc' }
   session.mustChange = Boolean(me.must_change_password)
+  session.totp = Boolean(me.totp_enabled)
   session.csrf = me.csrf_token
   session.permissions = me.permissions || []
   session.loaded = true
@@ -20,6 +21,7 @@ export function clearSession() {
   session.csrf = null
   session.permissions = []
   session.mustChange = false
+  session.totp = false
   session.loaded = true
 }
 

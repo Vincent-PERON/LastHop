@@ -16,3 +16,4 @@ asyncssh
 pyasn1
 argon2-cffi
 ldap3
+segno

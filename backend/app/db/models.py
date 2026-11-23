@@ -54,6 +54,12 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # TOTP optionnel (compte local) : secret chiffré AES-GCM, dernier pas accepté (anti-rejeu), codes de secours hachés
+    totp_secret_blob: Mapped[bytes | None] = mapped_column(LargeBinary)
+    totp_key_id: Mapped[str | None] = mapped_column(String(64))
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger)
+    totp_recovery: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
 
 
 LOCAL_ISSUER = "local"

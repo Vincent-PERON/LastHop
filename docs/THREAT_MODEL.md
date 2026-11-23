@@ -189,7 +189,7 @@ le parcours CLI (invite, pagination, commandes) a été validé contre des équi
 
 | Menace | Mesure | Résiduel |
 |---|---|---|
-| Force brute / bourrage d'identifiants (compte local) | argon2id (64 Mio), limitation par IP (20/min), **verrouillage progressif** par compte (5 échecs → 15 min, x2 jusqu'à 1 h), réponse identique que le compte existe ou non (hash factice : temps constant) | Un attaquant peut verrouiller le compte admin (déni de service) : `local-admin-reset` en secours ; mot de passe seul (pas de MFA) — choix du propriétaire, à compenser par un accès réseau restreint |
+| Force brute / bourrage d'identifiants (compte local) | argon2id (64 Mio), limitation par IP (20/min), **verrouillage progressif** par compte (5 échecs → 15 min, x2 jusqu'à 1 h), réponse identique que le compte existe ou non (hash factice : temps constant) | Un attaquant peut verrouiller le compte admin (déni de service) : `local-admin-reset` en secours ; **TOTP facultatif** (voir ci-dessous) : tant qu'il n'est pas activé, mot de passe seul — à compenser par un accès réseau restreint |
 | Mot de passe initial connu | Généré aléatoirement (Docker secret), **changement imposé** : aucune autre route accessible avant ; sessions antérieures invalidées à chaque changement | Le fichier initial reste sur l'hôte tant qu'il n'est pas supprimé |
 | Élévation via un IdP/annuaire compromis ou mal configuré | Un compte fédéré **n'est jamais super admin** : les groupes n'attribuent que operator/viewer (validation + `CHECK` SQL) ; rôle recalculé à chaque connexion ; refus par défaut sans correspondance | Un IdP compromis peut obtenir operator (lecture de la topologie/localisation) |
 | Connexion Google ouverte à tout compte Google | Domaine Workspace obligatoire (claim `hd`, pas seulement l'e-mail), e-mail vérifié booléen exigé | |
@@ -199,7 +199,9 @@ le parcours CLI (invite, pagination, commandes) a été validé contre des équi
 | SSRF via la configuration d'un fournisseur | Réservé au super admin ; hôtes refusés : boucle locale, link-local (métadonnées cloud), multicast ; https obligatoire en production pour OIDC ; messages d'erreur génériques | Les résolutions DNS vers des adresses internes ne sont pas filtrées |
 | Saisies hostiles dans l'identifiant | Validation (`[A-Za-z0-9._@-]`) avant la base ; libellés d'audit assainis (un NUL faisait échouer l'insertion : bug trouvé par les tests) | |
 | Épuisement de l'annuaire (verrouillage AD) | 10 échecs / 15 min par (fournisseur, identifiant) puis 429 | |
-Dépendance : `ldap3` (pure Python, sans vulnérabilité connue) n'est plus publié depuis 2021 : exposition limitée (appels sortants vers des annuaires configurés par le super admin, entrées échappées) ; à surveiller.
+| Vol du mot de passe local | **TOTP** facultatif (RFC 6238, SHA-1, 6 chiffres, ±1 pas) : secret 160 bits **chiffré AES-GCM** (AAD liée au compte), jamais renvoyé après la configuration ; connexion en 2 étapes **sans session** après le mot de passe (défi aléatoire à usage limité : 5 min, 5 essais) ; **anti-rejeu** (pas déjà accepté refusé, UPDATE conditionnel : testé en concurrence) ; échecs comptés dans le verrouillage ; activation/désactivation exigent mot de passe (+ code) | Codes de secours : 10 codes à usage unique stockés hachés, affichés une seule fois ; appareil + codes perdus = `local-admin-disable-totp` (accès au serveur) |
+| QR code / secret exposés | Le QR est généré côté serveur (SVG en `data:`, autorisé par la CSP `img-src`), uniquement dans la réponse à la configuration, après réauthentification | Visible à l'écran pendant la configuration |
+Dépendances : `segno` (QR code, pure Python, sans dépendance transitive) ; `ldap3` (pure Python, sans vulnérabilité connue) n'est plus publié depuis 2021 : exposition limitée (appels sortants vers des annuaires configurés par le super admin, entrées échappées) ; à surveiller.
 
 ## 4. Menaces à traiter dans les lots suivants (déjà identifiées)
 

@@ -4,6 +4,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ErrorBanner from '../components/ErrorBanner.vue'
+import TotpSection from '../components/TotpSection.vue'
 import { get, post } from '../api/client.js'
 import { session, setMe } from '../stores/session.js'
 
@@ -36,8 +37,10 @@ async function submit() {
 
 <template>
   <main :class="forced() ? 'login-page' : 'content'">
+    <h1 v-if="!forced()" class="h-sm">Mon compte</h1>
     <section :class="forced() ? 'login-card' : 'card narrow'" aria-labelledby="pw-title">
-      <h1 id="pw-title" class="h-sm">{{ forced() ? 'Définissez votre mot de passe' : 'Changer mon mot de passe' }}</h1>
+      <h1 v-if="forced()" id="pw-title" class="h-sm">Définissez votre mot de passe</h1>
+      <h2 v-else id="pw-title" class="h-sm">Mot de passe</h2>
       <p v-if="forced()" class="hint">Le mot de passe initial n’est valable qu’une fois : choisissez-en un nouveau pour continuer.</p>
       <p class="hint">12 caractères minimum, sans votre identifiant, sans espace en début ou en fin. Une phrase de passe longue convient très bien.</p>
       <ErrorBanner :message="error" />
@@ -48,5 +51,6 @@ async function submit() {
         <button type="submit" :disabled="busy">Enregistrer</button>
       </form>
     </section>
+    <TotpSection v-if="!forced() && session.user?.source === 'local'" />
   </main>
 </template>

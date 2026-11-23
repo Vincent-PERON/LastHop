@@ -79,6 +79,7 @@ function scenario(query) {
 
 let loggedIn = process.env.MOCK_LOGGED === '1'
 let mustChange = process.env.MOCK_MUST_CHANGE === '1'
+let totpEnabled = process.env.MOCK_TOTP === '1' // code valide en démo : 123456
 let m0
 const authProviders = [
   { id: 'ap1', kind: 'oidc', preset: 'keycloak', name: 'Keycloak', enabled: true, config: { issuer: 'https://keycloak.example.org/realms/lasthop', client_id: 'lasthop', scopes: 'openid profile email', groups_claim: 'groups', allowed_domains: [], require_email_verified: false, required_acr: null }, has_secret: true, role_map: { 'lasthop-operators': 'operator' }, default_role: 'viewer', redirect_uri: 'http://127.0.0.1:5173/api/v1/auth/oidc/callback' },
@@ -99,9 +100,30 @@ http.createServer(async (req, res) => {
   if (p === '/api/v1/auth/local/login' && req.method === 'POST') {
     const b = await readJson(req)
     if (b.password !== 'demo-password-1') return send(res, 401, { detail: 'Authentification refusée' })
+    if (totpEnabled) return send(res, 200, { status: 'totp_required', challenge: 'mock-challenge-token-0123456789' })
     loggedIn = true
     return send(res, 200, { status: 'ok', must_change_password: mustChange })
   }
+  if (p === '/api/v1/auth/local/totp' && req.method === 'POST') {
+    const b = await readJson(req)
+    if (!['123456', 'ABCDE-FGHJK'].includes((b.code || '').toUpperCase())) return send(res, 401, { detail: 'Authentification refusée' })
+    loggedIn = true
+    return send(res, 200, { status: 'ok', must_change_password: mustChange })
+  }
+  if (p === '/api/v1/auth/totp/setup' && req.method === 'POST') {
+    const b = await readJson(req)
+    if (b.password !== 'demo-password-1') return send(res, 403, { detail: 'Mot de passe incorrect' })
+    const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='120' height='120' fill='white'/><path d='M10 10h30v30H10zM80 10h30v30H80zM10 80h30v30H10zM50 50h20v20H50z' fill='#02213d'/></svg>"
+    return send(res, 200, { secret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', uri: 'otpauth://totp/LastHop:admin?secret=JBSWY3DPEHPK3PXP', qr: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` })
+  }
+  if (p === '/api/v1/auth/totp/enable' && req.method === 'POST') {
+    const b = await readJson(req)
+    if (b.code !== '123456') return send(res, 422, { detail: "Code incorrect : vérifiez l'heure de votre appareil et réessayez" })
+    totpEnabled = true
+    return send(res, 200, { enabled: true, recovery_codes: Array.from({ length: 10 }, (_, i) => `ABCD${i}-EFGH${i}`) })
+  }
+  if (p === '/api/v1/auth/totp/disable' && req.method === 'POST') { totpEnabled = false; return send(res, 200, { enabled: false }) }
+  if (p === '/api/v1/auth/totp/recovery-codes' && req.method === 'POST') return send(res, 200, { recovery_codes: Array.from({ length: 10 }, (_, i) => `WXYZ${i}-JKLM${i}`) })
   if (p.match(/^\/api\/v1\/auth\/ldap\/[\w-]+\/login$/) && req.method === 'POST') {
     const b = await readJson(req)
     if (b.password !== 'demo-password-1') return send(res, 401, { detail: 'Authentification refusée' })
@@ -115,7 +137,7 @@ http.createServer(async (req, res) => {
     mustChange = false
     return send(res, 200, { status: 'ok', csrf_token: 'mock-csrf-2' })
   }
-  if (p === '/api/v1/auth/me') return loggedIn ? send(res, 200, { user_id: 'u1', label: `demo.${ROLE}@example.org`, role: ROLE, permissions: PERMS, csrf_token: 'mock-csrf', auth_source: ROLE === 'admin' ? 'local' : 'oidc', must_change_password: mustChange }) : send(res, 401, { detail: 'Authentification requise' })
+  if (p === '/api/v1/auth/me') return loggedIn ? send(res, 200, { user_id: 'u1', label: `demo.${ROLE}@example.org`, role: ROLE, permissions: PERMS, csrf_token: 'mock-csrf', auth_source: ROLE === 'admin' ? 'local' : 'oidc', must_change_password: mustChange, totp_enabled: totpEnabled }) : send(res, 401, { detail: 'Authentification requise' })
   if (p === '/api/v1/auth/logout') { loggedIn = false; return send(res, 200, { status: 'logged_out' }) }
   if (p === '/api/v1/auth-providers' && req.method === 'GET') return send(res, 200, authProviders)
   if (p === '/api/v1/auth-providers' && req.method === 'POST') {

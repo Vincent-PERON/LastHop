@@ -36,7 +36,7 @@ export const routes = [
   { path: '/admin/audit', name: 'audit', component: AuditView, meta: { perm: 'audit:read', title: 'Journal d’audit' } },
   { path: '/tokens', name: 'tokens', component: TokensView, meta: { perm: 'tokens:manage', title: 'Tokens d’API' } },
   { path: '/login', name: 'login', component: LoginView, meta: { public: true, bare: true, title: 'Connexion' } },
-  { path: '/account/password', name: 'password', component: PasswordView, meta: { title: 'Mon mot de passe' } },
+  { path: '/account/password', name: 'password', component: PasswordView, meta: { title: 'Mon compte' } },
   { path: '/admin/auth', name: 'auth', component: AuthProvidersView, meta: { perm: 'auth:manage', title: 'Authentification' } },
   { path: '/forbidden', name: 'forbidden', component: Forbidden, meta: { title: 'Accès refusé' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },

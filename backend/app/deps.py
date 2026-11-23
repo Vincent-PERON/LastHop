@@ -108,6 +108,7 @@ async def get_principal(request: Request, db: DbSession) -> Principal:
         csrf=data.csrf,
         auth_source=source,
         must_change_password=user.must_change_password,
+        totp_enabled=user.totp_enabled,
     )
 
 

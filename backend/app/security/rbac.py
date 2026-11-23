@@ -65,6 +65,7 @@ class Principal:
     scopes: list[str] = field(default_factory=list)
     auth_source: str = "token"  # local | oidc | ldap | token
     must_change_password: bool = False
+    totp_enabled: bool = False
 
     @property
     def actor_type(self) -> str:

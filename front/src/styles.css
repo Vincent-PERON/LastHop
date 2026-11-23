@@ -142,3 +142,5 @@ body.modal-open { overflow: hidden; }
 .warn-box { background: #fff7ed; border-left: 4px solid var(--bad); padding: 0.5rem 0.7rem; border-radius: 4px; font-size: 0.85rem; }
 .test-result { font-size: 0.8rem; margin-top: 0.2rem; color: var(--muted); } .test-result.ok { color: var(--ok); } .test-result.bad { color: var(--bad); }
 .modal-foot { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
+.recovery { list-style: none; padding: 0; margin: 0.4rem 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; } .recovery code, code.secret { font-size: 0.95rem; letter-spacing: 0.05em; }
+.qr { display: block; margin: 0.4rem auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: #fff; }

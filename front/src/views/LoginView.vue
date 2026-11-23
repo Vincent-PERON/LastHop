@@ -17,6 +17,10 @@ const error = ref('')
 const busy = ref(false)
 const target = ref('local') // « local » ou l'identifiant d'un annuaire LDAP
 const form = reactive({ username: '', password: '' })
+// 2e étape (TOTP) : le défi reste en mémoire de la page uniquement ; il expire côté serveur au bout de 5 minutes
+const challenge = ref('')
+const code = ref('')
+const useRecovery = ref(false)
 
 const ldap = computed(() => providers.value.filter((p) => p.kind === 'ldap'))
 const oidc = computed(() => providers.value.filter((p) => p.kind === 'oidc'))
@@ -37,8 +41,11 @@ async function submit() {
   try {
     const r = await post(url, { username: form.username.trim(), password: form.password }, { quiet401: true })
     form.password = ''
-    setMe(await get('/api/v1/auth/me'))
-    await router.replace(r?.must_change_password ? { name: 'password' } : next())
+    if (r?.status === 'totp_required') {
+      challenge.value = r.challenge
+      return
+    }
+    await finish(r)
   } catch (e) {
     form.password = ''
     error.value =
@@ -49,6 +56,35 @@ async function submit() {
   } finally {
     busy.value = false
   }
+}
+
+async function finish(r) {
+  setMe(await get('/api/v1/auth/me'))
+  await router.replace(r?.must_change_password ? { name: 'password' } : next())
+}
+
+async function submitCode() {
+  error.value = ''
+  busy.value = true
+  try {
+    const r = await post('/api/v1/auth/local/totp', { challenge: challenge.value, code: code.value.trim() }, { quiet401: true })
+    code.value = ''
+    challenge.value = ''
+    await finish(r)
+  } catch (e) {
+    code.value = ''
+    error.value = e.status === 401 ? 'Code incorrect, expiré ou compte verrouillé. Recommencez la connexion si le problème persiste.'
+      : e.status === 429 ? 'Trop de tentatives : réessayez dans quelques minutes.' : e.message
+  } finally {
+    busy.value = false
+  }
+}
+
+function backToPassword() {
+  challenge.value = ''
+  code.value = ''
+  error.value = ''
+  useRecovery.value = false
 }
 
 function viaOidc(p) {
@@ -63,7 +99,16 @@ function viaOidc(p) {
       <p class="hint">Connectez-vous pour rechercher une adresse IP ou MAC et consulter la topologie.</p>
       <ErrorBanner :message="loadError" />
       <ErrorBanner :message="error" />
-      <form autocomplete="on" @submit.prevent="submit">
+      <form v-if="challenge" autocomplete="off" @submit.prevent="submitCode">
+        <p class="hint">Mot de passe accepté. Saisissez le code à 6 chiffres de votre application d’authentification, ou un code de secours.</p>
+        <label>{{ useRecovery ? 'Code de secours' : 'Code à 6 chiffres' }}
+          <input v-model="code" required :maxlength="useRecovery ? 16 : 7" :inputmode="useRecovery ? 'text' : 'numeric'" autocomplete="one-time-code" autofocus />
+        </label>
+        <button type="submit" :disabled="busy">{{ busy ? 'Vérification…' : 'Valider' }}</button>
+        <button type="button" class="ghost" @click="useRecovery = !useRecovery; code = ''">{{ useRecovery ? 'Utiliser le code de mon application' : 'Utiliser un code de secours' }}</button>
+        <button type="button" class="ghost" @click="backToPassword">Retour</button>
+      </form>
+      <form v-else autocomplete="on" @submit.prevent="submit">
         <label v-if="ldap.length">Compte
           <select v-model="target" aria-label="Type de compte">
             <option value="local">Compte local (super admin)</option>
@@ -74,7 +119,7 @@ function viaOidc(p) {
         <label>Mot de passe<input v-model="form.password" type="password" required maxlength="512" autocomplete="current-password" /></label>
         <button type="submit" :disabled="busy">{{ busy ? 'Connexion…' : 'Se connecter' }}</button>
       </form>
-      <template v-if="oidc.length">
+      <template v-if="oidc.length && !challenge">
         <p class="login-sep"><span>ou</span></p>
         <button v-for="p in oidc" :key="p.id" type="button" class="ghost provider-btn" @click="viaOidc(p)">
           <Icon name="shield" :size="18" /> Se connecter avec {{ p.name }}

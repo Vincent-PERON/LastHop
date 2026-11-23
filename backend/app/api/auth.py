@@ -34,6 +34,7 @@ from app.security.passwords import (
 )
 from app.security.ratelimit import hit, ip_limiter
 from app.security.sessions import COOKIE_NAME, LOGIN_COOKIE
+from app.services import totp_service
 from app.services.auth_providers import LdapConfig, open_secret, resolve_role
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -164,7 +165,6 @@ class LocalLogin(BaseModel):
 @router.post("/local/login", dependencies=[Depends(ip_limiter("login", 20, 60))])
 async def local_login(body: LocalLogin, request: Request, db: DbSession) -> JSONResponse:
     _require_origin(request)
-    s = request.app.state.settings
     username = body.username.strip().lower()
     user = (
         await db.execute(select(User).where(User.issuer == LOCAL_ISSUER, User.sub == username))
@@ -175,13 +175,37 @@ async def local_login(body: LocalLogin, request: Request, db: DbSession) -> JSON
     valid = await verify_password(user.password_hash if user and user.is_active and not locked else None, body.password)
     if user is None or not user.is_active or locked or not valid:
         if user is not None and user.is_active and not locked:
-            user.failed_login_count += 1
-            delay = lock_duration(user.failed_login_count)
-            if delay is not None:
-                user.locked_until = now + delay
+            register_failure(user, now)
         reason = "locked" if locked else "bad_credentials"
         raise await _deny(db, request, reason, provider="local", label=username)
 
+    if user.totp_enabled:
+        # Mot de passe correct mais second facteur requis : aucun cookie de session, seulement un défi à usage limité
+        challenge = await totp_service.create_challenge(request.app.state.redis, user.id)
+        await record(
+            db,
+            request,
+            "auth.login_password",
+            actor_type="anonymous",
+            actor_label=username,
+            details={"provider": "local", "totp": "required"},
+        )
+        await db.commit()
+        return JSONResponse({"status": "totp_required", "challenge": challenge})
+    return await open_local_session(db, request, user, now)
+
+
+def register_failure(user: User, now: datetime) -> None:
+    """Échec d'authentification du compte local (mot de passe OU second facteur) : compteur et verrouillage."""
+    user.failed_login_count += 1
+    delay = lock_duration(user.failed_login_count)
+    if delay is not None:
+        user.locked_until = now + delay
+
+
+async def open_local_session(
+    db: DbSession, request: Request, user: User, now: datetime, *, second_factor: str | None = None
+) -> JSONResponse:
     user.failed_login_count, user.locked_until, user.last_login_at = 0, None, now
     sid, _ = await request.app.state.sessions.create(user.id)
     await record(
@@ -189,14 +213,18 @@ async def local_login(body: LocalLogin, request: Request, db: DbSession) -> JSON
         request,
         "auth.login",
         actor_type="user",
-        actor_label=username,
+        actor_label=user.sub,
         target_type="user",
         target_id=str(user.id),
-        details={"role": user.role.value, "provider": "local"},
+        details={
+            "role": user.role.value,
+            "provider": "local",
+            **({"second_factor": second_factor} if second_factor else {}),
+        },
     )
     await db.commit()
     resp = JSONResponse({"status": "ok", "must_change_password": user.must_change_password})
-    _cookie(resp, COOKIE_NAME, sid, s.session_absolute_seconds)
+    _cookie(resp, COOKIE_NAME, sid, request.app.state.settings.session_absolute_seconds)
     return resp
 
 
@@ -392,6 +420,7 @@ async def me(principal: CurrentPrincipal) -> dict[str, Any]:
         "csrf_token": principal.csrf,  # None pour un token d'API
         "auth_source": principal.auth_source,
         "must_change_password": principal.must_change_password,
+        "totp_enabled": principal.totp_enabled,
     }
 
 

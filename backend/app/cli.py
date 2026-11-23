@@ -82,7 +82,25 @@ async def _local_admin_reset(username: str, password: str) -> int:
     return 0 if ok else 1
 
 
+async def _local_admin_disable_totp(username: str) -> int:
+    """Secours : retire le TOTP du compte local (appareil perdu ET codes de secours épuisés)."""
+    from app.db.session import close_db, init_db, session_scope
+    from app.services.totp_service import disable_totp
+
+    init_db(get_settings())
+    try:
+        async with session_scope() as db:
+            ok = await disable_totp(db, username)
+            await db.commit()
+    finally:
+        await close_db()
+    print("TOTP désactivé" if ok else "compte local introuvable")
+    return 0 if ok else 1
+
+
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "local-admin-disable-totp":
+        sys.exit(asyncio.run(_local_admin_disable_totp(sys.argv[2].lower())))
     if len(sys.argv) == 3 and sys.argv[1] == "local-admin-reset":
         # echo -n 'nouveau-mot-de-passe' | docker compose run --rm -T api python -m app.cli local-admin-reset admin
         sys.exit(asyncio.run(_local_admin_reset(sys.argv[2].lower(), sys.stdin.read().strip())))
@@ -94,7 +112,10 @@ def main() -> None:
         import pathlib
 
         sys.exit(asyncio.run(_oui_import(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8", errors="replace"))))
-    print("usage: python -m app.cli audit-verify | reencrypt | oui-import <oui.csv> | local-admin-reset <utilisateur>")
+    print(
+        "usage: python -m app.cli audit-verify | reencrypt | oui-import <oui.csv> | "
+        "local-admin-reset <utilisateur> | local-admin-disable-totp <utilisateur>"
+    )
     sys.exit(2)
 
 

@@ -47,7 +47,8 @@ describe('LoginView', () => {
     expect(JSON.parse(loginCall.init.body)).toEqual({ username: 'admin', password: 'secret-passphrase-1' })
     expect(w.find('input[type="password"]').element.value).toBe('')
     expect(session.user.source).toBe('local')
-    expect(router.currentRoute.value.fullPath).toBe('/search?q=10.0.0.5')
+    // la navigation charge la vue de façon paresseuse : on attend la fin plutôt que de compter les cycles
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/search?q=10.0.0.5'))
   })
 
   it('mot de passe initial : redirige vers le changement imposé', async () => {
@@ -60,7 +61,7 @@ describe('LoginView', () => {
     await w.find('input[type="password"]').setValue('initial-secret-1')
     await w.find('form').trigger('submit')
     await flush(); await flush(); await flush()
-    expect(router.currentRoute.value.name).toBe('password')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('password'))
   })
 
   it('LDAP : utilise l’endpoint de l’annuaire choisi ; échec = message générique, pas de redirection', async () => {
@@ -184,5 +185,112 @@ describe('AuthProvidersView', () => {
     expect(w.find('.test-result').text()).toContain('<img src=x onerror=alert(1)>')
     expect(w.find('.test-result img').exists()).toBe(false)
     w.unmount()
+  })
+})
+
+describe('TOTP', () => {
+  it('connexion en 2 étapes : le défi est envoyé avec le code, la session s’ouvre ensuite', async () => {
+    const { w, router, calls } = await mountLogin((url) => {
+      if (url.endsWith('/auth/providers')) return PROVIDERS
+      if (url.endsWith('/auth/local/login')) return { status: 'totp_required', challenge: 'c'.repeat(32) }
+      if (url.endsWith('/auth/local/totp')) return { status: 'ok', must_change_password: false }
+      if (url.endsWith('/auth/me')) return { ...ME, totp_enabled: true }
+    })
+    await w.find('input[autocomplete="username"]').setValue('admin')
+    await w.find('input[type="password"]').setValue('secret-passphrase-1')
+    await w.find('form').trigger('submit')
+    await flush(); await flush()
+    expect(w.text()).toContain('Saisissez le code à 6 chiffres')
+    expect(w.find('input[type="password"]').exists()).toBe(false) // le mot de passe n'est plus affiché ni conservé
+    expect(router.currentRoute.value.name).toBe('login')
+    await w.find('input[autocomplete="one-time-code"]').setValue('123 456')
+    await w.find('form').trigger('submit')
+    await flush(); await flush(); await flush()
+    const body = JSON.parse(calls.find((c) => c.url.endsWith('/auth/local/totp')).init.body)
+    expect(body).toEqual({ challenge: 'c'.repeat(32), code: '123 456' })
+    expect(session.totp).toBe(true)
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/search?q=10.0.0.5'))
+  })
+
+  it('code faux : message générique, champ vidé, on peut utiliser un code de secours ou revenir', async () => {
+    const { w } = await mountLogin((url) => {
+      if (url.endsWith('/auth/providers')) return PROVIDERS
+      if (url.endsWith('/auth/local/login')) return { status: 'totp_required', challenge: 'c'.repeat(32) }
+      if (url.endsWith('/auth/local/totp')) return [401, { detail: 'totp_bad_code interne' }]
+    })
+    await w.find('input[autocomplete="username"]').setValue('admin')
+    await w.find('input[type="password"]').setValue('secret-passphrase-1')
+    await w.find('form').trigger('submit')
+    await flush(); await flush()
+    await w.find('input[autocomplete="one-time-code"]').setValue('000000')
+    await w.find('form').trigger('submit')
+    await flush(); await flush()
+    expect(w.text()).toContain('Code incorrect, expiré ou compte verrouillé')
+    expect(w.text()).not.toContain('interne')
+    expect(w.find('input[autocomplete="one-time-code"]').element.value).toBe('')
+    await w.findAll('button').find((b) => b.text().includes('code de secours')).trigger('click')
+    expect(w.text()).toContain('Code de secours')
+    await w.findAll('button').find((b) => b.text() === 'Retour').trigger('click')
+    expect(w.find('input[type="password"]').exists()).toBe(true) // retour à l'étape du mot de passe
+  })
+})
+
+describe('TotpSection', () => {
+  async function account(handler) {
+    login('admin')
+    session.user.source = 'local'
+    const m = mockFetch(handler)
+    const router = await makeRouter('/account/password')
+    const w = mount(PasswordView, { global: { plugins: [router] } })
+    await flush()
+    return { w, ...m }
+  }
+
+  it('activation : mot de passe, QR, code de confirmation, puis codes de secours affichés une seule fois', async () => {
+    const { w, calls } = await account((url, init) => {
+      if (url.endsWith('/totp/setup')) return { secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://x', qr: 'data:image/svg+xml;utf8,<svg/>' }
+      if (url.endsWith('/totp/enable')) return { enabled: true, recovery_codes: ['AAAAA-BBBBB', 'CCCCC-DDDDD'] }
+      if (url.endsWith('/auth/me')) return { ...ME, totp_enabled: true }
+      return init.method === 'GET' ? ME : {}
+    })
+    const section = w.findComponent({ name: 'TotpSection' })
+    await section.findAll('button').find((b) => b.text().includes('Activer la double')).trigger('click')
+    await section.find('input[type="password"]').setValue('mon-mot-de-passe-1')
+    await section.find('form').trigger('submit')
+    await flush(); await flush()
+    expect(section.find('img.qr').attributes('src')).toContain('data:image/svg+xml')
+    expect(section.text()).toContain('JBSW Y3DP EHPK 3PXP')
+    expect(section.find('input[type="password"]').exists()).toBe(false) // mot de passe effacé
+    await section.find('input[autocomplete="one-time-code"]').setValue('123456')
+    await section.find('form').trigger('submit')
+    await flush(); await flush(); await flush()
+    expect(JSON.parse(calls.find((c) => c.url.endsWith('/totp/enable')).init.body)).toEqual({ code: '123456' })
+    expect(section.text()).toContain('AAAAA-BBBBB')
+    expect(section.text()).toContain('affichés une seule fois')
+    const finish = section.findAll('button').find((b) => b.text() === 'Terminer')
+    expect(finish.attributes('disabled')).toBeDefined() // il faut reconnaître avoir conservé les codes
+    await section.find('input[type="checkbox"]').setValue(true)
+    await finish.trigger('click')
+    expect(section.text()).not.toContain('AAAAA-BBBBB') // effacés de la page
+    expect(session.totp).toBe(true)
+  })
+
+  it('désactivation : mot de passe et code requis ; non affiché pour un compte fédéré', async () => {
+    const { w, calls } = await account((url, init) => (url.endsWith('/auth/me') ? { ...ME, totp_enabled: false } : init.method === 'GET' ? { ...ME, totp_enabled: true } : {}))
+    session.totp = true
+    await w.vm.$nextTick()
+    const section = w.findComponent({ name: 'TotpSection' })
+    expect(section.text()).toContain('activée')
+    await section.findAll('button').find((b) => b.text() === 'Désactiver').trigger('click')
+    const [pw, code] = section.findAll('input')
+    await pw.setValue('mon-mot-de-passe-1'); await code.setValue('654321')
+    await section.find('form').trigger('submit')
+    await flush(); await flush(); await flush()
+    expect(JSON.parse(calls.find((c) => c.url.endsWith('/totp/disable')).init.body)).toEqual({ password: 'mon-mot-de-passe-1', code: '654321' })
+    login('viewer')
+    session.user.source = 'oidc'
+    const router = await makeRouter('/account/password')
+    const w2 = mount(PasswordView, { global: { plugins: [router] } })
+    expect(w2.findComponent({ name: 'TotpSection' }).exists()).toBe(false)
   })
 })

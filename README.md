@@ -142,13 +142,21 @@ Se connecter ensuite avec le compte super admin local (voir 2.5).
 | **Google Workspace** | Client OAuth « Application Web », même URL de redirection | Domaine(s) Workspace **obligatoire(s)** (claim `hd`), rôle par défaut (Google ne fournit pas les groupes) |
 | **LDAP / AD** | Compte de service en **lecture seule** | URL `ldaps://…` (ou StartTLS), autorité de certification si privée, base de recherche, filtre (`(sAMAccountName={username})` pour AD, `(uid={username})` sinon), groupes (`memberOf`) → rôles |
 
-Le **MFA** reste à imposer chez le fournisseur OIDC (Keycloak, Entra, Google). Une connexion **LDAP ne peut pas** l'imposer ; le compte **local** non plus (mot de passe seul, verrouillage progressif après 5 échecs) : protégez-les par le réseau (accès restreint, VPN) et un mot de passe long.
+Le **MFA** reste à imposer chez le fournisseur OIDC (Keycloak, Entra, Google). Une connexion **LDAP ne peut pas** l'imposer.
+
+**Double authentification (TOTP) du compte local — facultative, recommandée** : icône clé en haut à droite → *Mon compte* → *Activer la double authentification* (mot de passe, QR code à scanner avec FreeOTP, Google/Microsoft Authenticator, 1Password…, code de confirmation). **10 codes de secours** sont affichés une seule fois (usage unique chacun). Ensuite, la connexion locale demande le mot de passe puis un code à 6 chiffres. Un code déjà utilisé est refusé (anti-rejeu) et les échecs comptent dans le verrouillage du compte. Sans TOTP, protégez le compte local par le réseau (VPN, accès restreint) et un mot de passe long.
 **LDAP non chiffré** : possible uniquement après une case de reconnaissance explicite (laboratoire) ; il est signalé dans la liste et tracé dans l'audit.
 
 **Mot de passe du super admin perdu** (accès au serveur requis) :
 
 ```bash
 echo -n 'nouveau-mot-de-passe-long' | docker compose run --rm -T api python -m app.cli local-admin-reset admin
+```
+
+**Appareil TOTP perdu et codes de secours épuisés** (même condition) :
+
+```bash
+docker compose run --rm api python -m app.cli local-admin-disable-totp admin
 ```
 
 ### 2.6 Premiers réglages (en super admin)

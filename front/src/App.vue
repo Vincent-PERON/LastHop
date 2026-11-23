@@ -72,7 +72,7 @@ async function logout() {
           <input v-model="q" type="search" maxlength="100" placeholder="Recherche rapide : IP, MAC, nom d’hôte, port…" aria-label="Recherche rapide" autocomplete="off" />
         </form>
         <span class="who"><Icon name="user" :size="18" /> {{ session.user?.label }} <em>{{ USER_ROLE_LABEL[session.user?.role] || session.user?.role }}</em></span>
-        <RouterLink v-if="session.user?.source === 'local'" to="/account/password" class="icon-btn" title="Mon mot de passe" aria-label="Mon mot de passe"><Icon name="key" :size="20" /></RouterLink>
+        <RouterLink v-if="session.user?.source === 'local'" to="/account/password" class="icon-btn" title="Mon compte (mot de passe, double authentification)" aria-label="Mon compte"><Icon name="key" :size="20" /></RouterLink>
         <button type="button" class="icon-btn" title="Déconnexion" aria-label="Déconnexion" @click="logout"><Icon name="power" :size="20" /></button>
       </header>
       <RouterView />
