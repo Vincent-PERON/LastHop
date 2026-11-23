@@ -23,7 +23,8 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: {python-version: "3.12"}
-      - run: pip install --require-hashes -r requirements-dev.lock
+      # dépendances d'exécution (mypy et les tests ont besoin de pydantic, SQLAlchemy…) + outils de développement
+      - run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
       - run: ruff check app tests && ruff format --check app tests migrations
       - run: mypy app
       - run: bandit -q -r app
