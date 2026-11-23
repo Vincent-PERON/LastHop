@@ -1,0 +1,15 @@
+title = "LastHop"
+
+[extend]
+useDefault = true
+
+# Valeurs JETABLES des tests (simulateurs SNMP/SSH dans un réseau Docker éphémère) : ce ne sont pas des secrets.
+# L'exception est limitée à ces motifs exacts, pas à des dossiers entiers : tout autre secret reste détecté.
+[[allowlists]]
+description = "identifiants de test du simulateur SNMP/SSH"
+regexes = [
+  '''test-(auth|priv)-key-1234''',
+  '''wrong-(auth|priv)-key-9999''',
+  '''test-ssh-password-1234''',
+  '''^snmp_[a-z0-9_]+$''',   # nom d'un réglage dans une requête SQL de test (WHERE key='snmp_…')
+]

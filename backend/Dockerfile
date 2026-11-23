@@ -8,7 +8,9 @@ RUN python -m venv /opt/venv && /opt/venv/bin/pip install --require-hashes -r re
 
 FROM python:3.12-slim AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH=/opt/venv/bin:$PATH PYTHONPATH=/srv
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app
+# Correctifs de sécurité Debian publiés depuis la construction de l'image de base (scan Trivy en CI)
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/* \
+ && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /srv
 COPY --chown=root:root app ./app
@@ -20,9 +22,10 @@ HEALTHCHECK --interval=15s --timeout=4s --retries=5 CMD ["python", "-c", "import
 CMD ["uvicorn", "app.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--no-server-header", "--no-access-log"]
 
 FROM runtime AS test
+# hadolint ignore=DL3066
 USER root
 COPY requirements-dev.lock .
-RUN pip install --require-hashes -r requirements-dev.lock
+RUN pip install --no-cache-dir --require-hashes -r requirements-dev.lock
 COPY pyproject.toml .
 COPY tests ./tests
 USER 10001

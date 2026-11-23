@@ -18,7 +18,7 @@ Prérequis : Docker (Compose v2) ; Node.js 24 pour l'interface seule.
 docker compose -f docker-compose.test.yml run --rm --build tests
 ```
 
-Lance PostgreSQL 16, Redis, des simulateurs SNMP (Aruba, Comware, Cisco) et SSH, applique les migrations, puis exécute toute la suite avec la couverture (~3 min).
+Lance PostgreSQL 16, Redis, des simulateurs SNMP (Aruba/ProCurve, Comware, Cisco IOS ; chacun testé en SNMP **v2c et v3** : identité, interfaces, LLDP/CDP, trunks, FDB, ARP, recherche MAC) et SSH, applique les migrations, puis exécute toute la suite avec la couverture (~4 min).
 Pour nettoyer ensuite : `docker compose -f docker-compose.test.yml down -v`.
 
 ### 1.2 Tests de l'interface
@@ -45,7 +45,15 @@ Pour vérifier le rendu avec la politique de sécurité (CSP) exacte de producti
 npm run build && npm run csp-preview    # http://localhost:5180
 ```
 
-### 1.4 Essayer l'application complète avec un Keycloak local
+### 1.4 Contrôles de sécurité (mêmes que la CI)
+
+```bash
+./scripts/security-check.sh
+```
+
+Exécute dans des conteneurs (rien à installer) : recherche de secrets dans les fichiers et l'historique git (gitleaks), analyse statique (semgrep, bandit), Dockerfile (hadolint), dépendances Python et npm (pip-audit, npm audit, Trivy), puis construit les images et les scanne (HIGH/CRITICAL corrigeables). Premier échec = arrêt.
+
+### 1.5 Essayer l'application complète avec un Keycloak local
 
 ```bash
 ./scripts/gen-secrets.sh

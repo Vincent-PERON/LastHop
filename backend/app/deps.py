@@ -130,4 +130,6 @@ async def still_authenticated(request: Request, principal: Principal) -> bool:
             t = (await db.execute(select(ApiToken).where(ApiToken.id == principal.token_id))).scalar_one_or_none()
             return t is not None and t.revoked_at is None and t.expires_at > datetime.now(UTC)
     sid = request.cookies.get(COOKIE_NAME)
-    return bool(sid) and await request.app.state.sessions.get(sid) is not None
+    if not sid:
+        return False
+    return await request.app.state.sessions.get(sid) is not None

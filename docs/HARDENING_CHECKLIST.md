@@ -52,7 +52,9 @@ Cocher chaque ligne avant la mise en production.
 
 ## Conteneurs et supply chain
 - [ ] Images construites par la CI, scannées Trivy (HIGH/CRITICAL bloquants), épinglées par digest.
-- [ ] `pip-audit`, `bandit`, `semgrep` verts ; Renovate actif et PR de sécurité traitées sous 7 jours.
+- [ ] `./scripts/security-check.sh` vert avant chaque mise en production (mêmes contrôles que la CI : gitleaks, semgrep, hadolint, Trivy, bandit, pip-audit, npm audit, scan des images) ; CodeQL actif sur le dépôt.
+- [ ] Renovate installé sur le dépôt (GitHub App) et PR de sécurité traitées sous 7 jours ; SBOM de la CI (`sbom`) conservés avec chaque version déployée.
+- [ ] Protection de la branche `main` : CI obligatoire (jobs backend, front, tests, static-security, images), revue obligatoire, historique linéaire.
 - [ ] `docker compose ps` : tous `healthy` ; `docker inspect` confirme `ReadonlyRootfs=true` et `CapDrop=[ALL]` pour api/worker/beat.
 
 ## Exploitation

@@ -31,7 +31,11 @@ async def test_full_login_flow_session_cookie_flags_and_open_redirect_blocked(
     assert r.status_code == 302 and r.headers["location"] == ORIGIN + "/devices"
     sc = ";".join(r.headers.get_list("set-cookie")).lower()
     assert (
-        "__host-lasthop_session=" in sc and "httponly" in sc and "secure" in sc and "path=/" in sc and "domain" not in sc
+        "__host-lasthop_session=" in sc
+        and "httponly" in sc
+        and "secure" in sc
+        and "path=/" in sc
+        and "domain" not in sc
     )
     me = await client.get("/api/v1/auth/me")
     assert me.status_code == 200 and me.json()["role"] == "viewer" and me.json()["csrf_token"]

@@ -77,8 +77,14 @@ réseau `backend` interne, `api` **sans accès** au réseau `snmp`.
 Résiduel : Postgres exige quelques capacités au premier démarrage ; TLS interne Postgres/Redis non activé par défaut (support présent dans la configuration, PKI interne à fournir).
 
 ### Chaîne d'approvisionnement
-Dépendances épinglées avec hash (`pip --require-hashes`), `pip-audit` (aucune vulnérabilité connue au lot a), bandit, semgrep, Trivy en CI, Renovate.
+Dépendances épinglées avec hash (`pip --require-hashes`), puis, en CI (`.github/workflows/ci.yml`, `codeql.yml`) et en local (`scripts/security-check.sh`) :
+`pip-audit` (production et développement), `npm audit`, bandit, semgrep (Python, OWASP Top 10, JavaScript, Dockerfile, secrets), CodeQL (hebdomadaire),
+gitleaks (fichiers **et historique git**), hadolint, Trivy (dépôt : dépendances/secrets/configuration ; images : HIGH/CRITICAL corrigeables bloquants), revue des
+dépendances sur les pull requests, SBOM CycloneDX des images. Actions GitHub **épinglées par SHA**, droits `contents: read` par défaut. Renovate pour les mises à jour.
+Images : `apt-get upgrade` (API) et Alpine 3.24 + `apk upgrade` (front, utilisateur non privilégié) pour embarquer les correctifs de l'OS ; premier scan réel : 1 CVE HIGH (API)
+et 6 (front, base nginx sur Alpine 3.21 en fin de support) corrigées.
 Bibliothèque SNMP : `pysnmp` officiel (activement maintenu).
+Limite : les exceptions gitleaks (`.gitleaks.toml`) sont restreintes aux motifs exacts des identifiants jetables des tests ; toute autre fuite reste bloquante.
 
 ## 3 bis. Lot (b) — inventaire et SNMP
 
