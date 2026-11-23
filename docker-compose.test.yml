@@ -1,0 +1,84 @@
+# Tests d'intégration : PostgreSQL 16 + Redis (ACL) éphémères, mêmes rôles/ACL que la prod.
+# Prérequis : ./scripts/gen-secrets.sh        Lancer : docker compose -f docker-compose.test.yml run --rm --build tests
+name: lasthop-test
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: lasthop
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets: [postgres_superuser_password, db_owner_password, db_app_password]
+    volumes:
+      - ./db/01-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lasthop"]
+      interval: 2s
+      retries: 30
+    networks: [t]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--aclfile", "/run/secrets/redis_users.acl", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --user lasthop --pass \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 2s
+      retries: 30
+    secrets: [redis_users.acl, redis_password]
+    networks: [t]
+  snmpsim:
+    build: ./tests-infra/snmpsim
+    # 3 réseaux = 3 adresses distinctes pour le même simulateur (3 équipements de labo simultanés : mgmt_ip est unique)
+    networks:
+      t: {aliases: [sim-a]}
+      n2: {aliases: [sim-b]}
+      n3: {aliases: [sim-c]}
+  sshsim:
+    build: ./tests-infra/sshsim
+    networks: [t]
+  worker:
+    build: {context: ./backend, target: test}
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--without-gossip", "--without-mingle", "-Q", "celery,realtime"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      LASTHOP_ENV: dev
+      LASTHOP_DB_HOST: postgres
+      LASTHOP_DB_PASSWORD_FILE: /run/secrets/db_app_password
+      LASTHOP_REDIS_HOST: redis
+      LASTHOP_REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      LASTHOP_MASTER_KEYS_FILE: /run/secrets/master_keys.json
+    secrets: [db_app_password, redis_password, master_keys.json]
+    networks: [t, n2, n3]
+  tests:
+    build: {context: ./backend, target: test}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      snmpsim: {condition: service_started}
+      sshsim: {condition: service_started}
+      worker: {condition: service_started}
+    environment:
+      COVERAGE_FILE: /tmp/.coverage
+      LASTHOP_ENV: dev
+      LASTHOP_DB_HOST: postgres
+      LASTHOP_DB_PASSWORD_FILE: /run/secrets/db_app_password
+      LASTHOP_DB_OWNER_PASSWORD_FILE: /run/secrets/db_owner_password
+      LASTHOP_REDIS_HOST: redis
+      LASTHOP_REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      LASTHOP_MASTER_KEYS_FILE: /run/secrets/master_keys.json
+    secrets: [db_app_password, db_owner_password, redis_password, master_keys.json]
+    networks: [t, n2, n3]
+    command: ["sh", "-c", "alembic upgrade head && pytest -q -p no:cacheprovider --cov=app --cov-report=term-missing:skip-covered"]
+networks:
+  t: {}
+  n2: {}
+  n3: {}
+secrets:
+  postgres_superuser_password: {file: ./secrets/postgres_superuser_password}
+  db_owner_password: {file: ./secrets/db_owner_password}
+  db_app_password: {file: ./secrets/db_app_password}
+  redis_password: {file: ./secrets/redis_password}
+  redis_users.acl: {file: ./secrets/redis_users.acl}
+  master_keys.json: {file: ./secrets/master_keys.json}

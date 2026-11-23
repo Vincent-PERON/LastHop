@@ -1,0 +1,40 @@
+{
+  "name": "lasthop-front",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "mock": "node dev/mock-server.mjs",
+    "csp-preview": "node dev/csp-preview.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint src tests",
+    "audit": "npm audit --omit=dev --audit-level=moderate"
+  },
+  "dependencies": {
+    "@tanstack/vue-table": "9.3.1",
+    "cytoscape": "3.35.0",
+    "vue": "3.5.46",
+    "vue-router": "5.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@vitejs/plugin-vue": "6.0.11",
+    "@vue/test-utils": "2.6.0",
+    "eslint": "10.15.0",
+    "eslint-plugin-vue": "10.12.1",
+    "globals": "17.14.0",
+    "jsdom": "31.0.1",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  },
+  "overrides": {
+    "minimatch": "11.0.9",
+    "glob": "14.0.6"
+  }
+}

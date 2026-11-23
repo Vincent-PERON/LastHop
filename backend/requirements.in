@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+asyncpg
+alembic
+pydantic
+pydantic-settings
+redis
+joserfc
+httpx
+cryptography
+celery[redis]
+packaging
+pysnmp
+asyncssh
+pyasn1

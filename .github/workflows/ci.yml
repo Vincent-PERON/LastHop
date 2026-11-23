@@ -1,0 +1,57 @@
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: backend}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install --require-hashes -r requirements-dev.lock
+      - run: ruff check app tests && ruff format --check app tests migrations
+      - run: mypy app
+      - run: bandit -q -r app
+      - run: pip-audit -r requirements.lock --no-deps --disable-pip
+      - name: Semgrep
+        run: pip install semgrep==1.* && semgrep --config p/python --config p/owasp-top-ten --error app
+      - name: Interdiction de tout SET SNMP
+        run: "! grep -rEn 'set_cmd|SetRequest|setCmd' app"
+
+  front:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: front}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "24"}
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --audit-level=moderate        # prod + dev : 0 vulnérabilité attendue (overrides minimatch/glob)
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/gen-secrets.sh
+      - run: docker compose -f docker-compose.test.yml run --rm --build tests
+
+  images:
+    runs-on: ubuntu-latest
+    needs: [tests, front]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target runtime -t lasthop-api:ci backend
+      - run: docker build -t lasthop-front:ci front
+      - uses: aquasecurity/trivy-action@0.28.0
+        with: {image-ref: "lasthop-api:ci", severity: "HIGH,CRITICAL", exit-code: "1", ignore-unfixed: true}
+      - uses: aquasecurity/trivy-action@0.28.0
+        with: {image-ref: "lasthop-front:ci", severity: "HIGH,CRITICAL", exit-code: "1", ignore-unfixed: true}

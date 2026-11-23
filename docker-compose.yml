@@ -1,0 +1,158 @@
+# LastHop — déploiement. Prérequis : ./scripts/gen-secrets.sh, écrire secrets/oidc_client_secret, copier .env.example en .env.
+name: lasthop
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: {driver: json-file, options: {max-size: "10m", max-file: "5"}}
+
+x-app-env: &app-env
+  LASTHOP_ENV: ${LASTHOP_ENV:-prod}
+  LASTHOP_FRONTEND_ORIGIN: ${LASTHOP_FRONTEND_ORIGIN:?}
+  LASTHOP_OIDC_ISSUER: ${LASTHOP_OIDC_ISSUER:?}
+  LASTHOP_OIDC_CLIENT_ID: ${LASTHOP_OIDC_CLIENT_ID:-lasthop}
+  LASTHOP_OIDC_REDIRECT_URI: ${LASTHOP_OIDC_REDIRECT_URI:?}
+  LASTHOP_OIDC_ADMIN_GROUPS: ${LASTHOP_OIDC_ADMIN_GROUPS:-["lasthop-admins"]}
+  LASTHOP_OIDC_OPERATOR_GROUPS: ${LASTHOP_OIDC_OPERATOR_GROUPS:-["lasthop-operators"]}
+  LASTHOP_OIDC_VIEWER_GROUPS: ${LASTHOP_OIDC_VIEWER_GROUPS:-["lasthop-viewers"]}
+  LASTHOP_DB_HOST: postgres
+  LASTHOP_DB_PASSWORD_FILE: /run/secrets/db_app_password
+  LASTHOP_REDIS_HOST: redis
+  LASTHOP_REDIS_PASSWORD_FILE: /run/secrets/redis_password
+  LASTHOP_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+  LASTHOP_MASTER_KEYS_FILE: /run/secrets/master_keys.json
+  FORWARDED_ALLOW_IPS: ${LASTHOP_FORWARDED_ALLOW_IPS:-172.30.0.0/24}
+
+services:
+  proxy:
+    image: caddy:2.10-alpine
+    <<: *hardened
+    ports: ["${HTTP_PORT:-80}:80", "${HTTPS_PORT:-443}:443"]
+    environment: {SITE_ADDRESS: "${SITE_ADDRESS:?}"}
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    tmpfs: [/config, /tmp]
+    cap_add: [NET_BIND_SERVICE]
+    depends_on: {api: {condition: service_healthy}, front: {condition: service_started}}
+    networks: {edge: {ipv4_address: 172.30.0.10}}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+
+  front:
+    build: {context: ./front}
+    <<: *hardened
+    tmpfs: [/tmp]
+    networks: [edge]
+
+  api:
+    build: {context: ./backend, target: runtime}
+    <<: *hardened
+    environment: *app-env
+    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    tmpfs: [/tmp]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [edge, backend]   # edge : sortie vers l'IdP OIDC ; AUCUN accès au réseau SNMP
+    deploy: {resources: {limits: {cpus: "2", memory: 1g}}}
+
+  migrate:
+    build: {context: ./backend, target: runtime}
+    <<: *hardened
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      LASTHOP_DB_HOST: postgres
+      LASTHOP_DB_OWNER_PASSWORD_FILE: /run/secrets/db_owner_password
+    secrets: [db_owner_password]
+    depends_on: {postgres: {condition: service_healthy}}
+    networks: [backend]
+
+  worker:
+    build: {context: ./backend, target: runtime}
+    <<: *hardened
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--without-gossip", "--without-mingle", "-Q", "celery"]
+    environment: *app-env
+    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    tmpfs: [/tmp]
+    depends_on: {redis: {condition: service_healthy}, migrate: {condition: service_completed_successfully}}
+    networks: [backend, snmp]   # seul service ayant accès aux équipements (UDP/161)
+    deploy: {resources: {limits: {cpus: "2", memory: 1g}}}
+
+  # File « realtime » : worker dédié, pour que les recherches en direct ne soient pas retardées par les collectes planifiées
+  worker-rt:
+    build: {context: ./backend, target: runtime}
+    <<: *hardened
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--without-gossip", "--without-mingle", "-Q", "realtime", "-n", "rt@%h", "--concurrency=4"]
+    environment: *app-env
+    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    tmpfs: [/tmp]
+    depends_on: {redis: {condition: service_healthy}, migrate: {condition: service_completed_successfully}}
+    networks: [backend, snmp]
+    deploy: {resources: {limits: {cpus: "2", memory: 1g}}}
+
+  beat:
+    build: {context: ./backend, target: runtime}
+    <<: *hardened
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=INFO", "-s", "/tmp/celerybeat-schedule"]
+    environment: *app-env
+    secrets: [db_app_password, redis_password, oidc_client_secret, master_keys.json]
+    tmpfs: [/tmp]
+    depends_on: {redis: {condition: service_healthy}}
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    <<: *hardened
+    command: ["redis-server", "--aclfile", "/run/secrets/redis_users.acl", "--save", "", "--appendonly", "no", "--protected-mode", "yes"]
+    secrets: [redis_users.acl, redis_password]
+    user: "999:999"          # non-root dès le départ (l'entrypoint ne tente plus de chown)
+    tmpfs: ["/data:uid=999,gid=999"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --user lasthop --pass \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 5s
+      retries: 20
+    networks: [backend]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, FOWNER, DAC_OVERRIDE]   # requis par l'entrypoint officiel au 1er démarrage
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: lasthop
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets: [postgres_superuser_password, db_owner_password, db_app_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/01-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lasthop"]
+      interval: 5s
+      retries: 20
+    networks: [backend]
+
+networks:
+  edge:
+    ipam: {config: [{subnet: 172.30.0.0/24}]}
+  backend:
+    internal: true          # aucune route vers l'extérieur : Postgres/Redis ni exposés ni joignables d'Internet
+  snmp: {}                  # sortie UDP/161 vers les équipements (à restreindre par pare-feu hôte : voir checklist)
+
+volumes: {pgdata: {}, caddy_data: {}}
+
+secrets:
+  postgres_superuser_password: {file: ./secrets/postgres_superuser_password}
+  db_owner_password: {file: ./secrets/db_owner_password}
+  db_app_password: {file: ./secrets/db_app_password}
+  redis_password: {file: ./secrets/redis_password}
+  redis_users.acl: {file: ./secrets/redis_users.acl}
+  oidc_client_secret: {file: ./secrets/oidc_client_secret}
+  master_keys.json: {file: ./secrets/master_keys.json}
