@@ -10,7 +10,8 @@ from app.drivers.models import IfInfo, NeighborInfo
 from app.snmp import oids
 from app.snmp.client import AUTH_FAILURE, TIMEOUT, SnmpClient, SnmpError, SnmpValue, as_text
 
-PHYSICAL_IF_TYPES = {6, 161}  # ethernetCsmacd, ieee8023adLag
+# ethernetCsmacd, fastEther, fastEtherFX, gigabitEthernet (anciens équipements), ieee8023adLag
+PHYSICAL_IF_TYPES = {6, 62, 69, 117, 161}
 MAX_ROWS = 200_000
 FDB_LEARNED = 3
 
@@ -66,12 +67,13 @@ async def collect_interfaces(client: SnmpClient, max_rep: int = 25) -> list[IfIn
     bridge = await optional(client, oids.DOT1D_BASE_PORT_IFINDEX, max_rep)  # bridge port -> ifIndex
     by_if = {int(v): int(k) for k, v in bridge.items() if isinstance(v, int)}
     out: list[IfInfo] = []
-    for idx_s, d in descr.items():
+    # Certains équipements n'exposent pas ifDescr (seulement ifName) : on parcourt tous les index de type connu
+    for idx_s in sorted(types, key=lambda s: int(s) if s.isdigit() else 0):
         t = _to_int(types.get(idx_s))
         if not idx_s.isdigit() or t not in PHYSICAL_IF_TYPES:
             continue
         idx = int(idx_s)
-        d_text = as_text(d)
+        d_text = as_text(descr.get(idx_s)) or as_text(names.get(idx_s), 64)
         out.append(
             IfInfo(
                 if_index=idx,
@@ -80,7 +82,7 @@ async def collect_interfaces(client: SnmpClient, max_rep: int = 25) -> list[IfIn
                 alias=as_text(aliases.get(idx_s)),
                 if_type=t or 0,
                 oper_status=_to_int(oper.get(idx_s)),
-                bridge_port=by_if.get(idx),
+                bridge_port=by_if.get(idx) if bridge else idx,  # sans table de ports : hypothèse bridge port = ifIndex
             )
         )
     return out
@@ -99,7 +101,12 @@ async def collect_mac_counts(client: SnmpClient, ifs: list[IfInfo], max_rep: int
             continue
         status = await optional(client, status_oid, max_rep)
         for key, bp in ports.items():
-            if status.get(key) == FDB_LEARNED and isinstance(bp, int) and bp in by_bp:
+            # colonne de statut absente (équipements minimalistes) : toutes les entrées sont considérées apprises
+            if (
+                status.get(key, FDB_LEARNED if not status else None) == FDB_LEARNED
+                and isinstance(bp, int)
+                and bp in by_bp
+            ):
                 counts[by_bp[bp]] += 1
         break
     return dict(counts)
@@ -266,7 +273,8 @@ from app.drivers.models import ArpInfo, FdbInfo  # noqa: E402
 
 ARP_PHYSICAL_OK = {1, 2, 3, 4}  # reachable, stale, delay, probe (invalid/unknown/incomplete ignorés)
 ARP_MEDIA_OK = {3, 4}  # dynamic, static
-_VLAN_NAME = re.compile(r"(?i)vlan\D*(\d{1,4})$")
+_VLAN_NAME = re.compile(r"(?i)vlan\D*(\d{1,4})$")  # « Vlan10 », « Vlan-interface10 »
+_VLAN_NAME_SUFFIXED = re.compile(r"(?i)^vlan[_\- ]?(\d{1,4})[_\- ]")  # « vlan10_users » (noms libres, FortiGate)
 
 
 def is_unicast_mac(raw: bytes) -> bool:
@@ -293,7 +301,8 @@ async def _vlan_of_ifindexes(client: SnmpClient, if_indexes: set[int], max_rep: 
     names = await optional(client, oids.IF_NAME, max_rep)
     out: dict[int, int] = {}
     for idx in if_indexes:
-        m = _VLAN_NAME.search(as_text(names.get(str(idx)), 64))
+        label = as_text(names.get(str(idx)), 64)
+        m = _VLAN_NAME.search(label) or _VLAN_NAME_SUFFIXED.search(label)
         if m and 1 <= int(m.group(1)) <= 4094:
             out[idx] = int(m.group(1))
     return out
@@ -331,7 +340,16 @@ async def collect_arp(client: SnmpClient, max_rep: int = 25) -> list[ArpInfo]:
 async def bridge_port_map(client: SnmpClient, max_rep: int = 25) -> dict[int, int]:
     """Numéro de port de bridge -> ifIndex (dans le contexte courant : sur Cisco la numérotation dépend du VLAN)."""
     rows = await optional(client, oids.DOT1D_BASE_PORT_IFINDEX, max_rep)
+    if not rows:
+        # Table absente : repli « port de bridge = ifIndex » (cas courant des pare-feux et petits équipements)
+        types = await optional(client, oids.IF_TYPE, max_rep)
+        return {int(k): int(k) for k, v in types.items() if k.isdigit() and v in PHYSICAL_IF_TYPES}
     return {int(k): int(v) for k, v in rows.items() if k.isdigit() and isinstance(v, int)}
+
+
+def _not_learned(status: dict[str, SnmpValue], suffix: str) -> bool:
+    """Entrée à ignorer. Colonne de statut totalement absente : on ne peut pas filtrer, toutes sont retenues."""
+    return bool(status) and status.get(suffix) != FDB_LEARNED
 
 
 def _mac_from_index(parts: list[str]) -> bytes | None:
@@ -354,7 +372,7 @@ async def collect_fdb(
         status = await optional(client, oids.DOT1Q_TP_FDB_STATUS, max_rep)
         for suffix, bp in ports.items():
             parts = suffix.split(".")
-            if len(parts) != 7 or status.get(suffix) != FDB_LEARNED or not isinstance(bp, int) or bp not in mapping:
+            if len(parts) != 7 or _not_learned(status, suffix) or not isinstance(bp, int) or bp not in mapping:
                 continue
             raw = _mac_from_index(parts[1:])
             vlan = int(parts[0]) if parts[0].isdigit() and 1 <= int(parts[0]) <= 4094 else None
@@ -365,7 +383,7 @@ async def collect_fdb(
     status = await optional(client, oids.DOT1D_TP_FDB_STATUS, max_rep)
     for suffix, bp in ports.items():
         parts = suffix.split(".")
-        if len(parts) != 6 or status.get(suffix) != FDB_LEARNED or not isinstance(bp, int) or bp not in mapping:
+        if len(parts) != 6 or _not_learned(status, suffix) or not isinstance(bp, int) or bp not in mapping:
             continue
         raw = _mac_from_index(parts)
         if raw is not None:
@@ -469,7 +487,7 @@ async def lookup_mac(
         pk, sk = f"{port_oid}.{suffix}", f"{status_oid}.{suffix}"
         vals = await _soft_get(client, pk, sk)
         bp, st = vals.get(pk), vals.get(sk)
-        if isinstance(bp, int) and st in (FDB_LEARNED, FDB_SELF):
+        if isinstance(bp, int) and st in (FDB_LEARNED, FDB_SELF, None):  # None : colonne de statut non exposée
             return LiveHit(
                 bridge_port=bp, if_index=await _port_to_ifindex(client, bp), vlan=vlan, is_self=st == FDB_SELF
             )

@@ -82,6 +82,31 @@ async def _run_device_test(db: AsyncSession, keyring: KeyRing, params: dict[str,
     return {"ok": True, "latency_ms": round((time.monotonic() - started) * 1000), **asdict(ident)}
 
 
+async def _run_diagnose(db: AsyncSession, keyring: KeyRing, params: dict[str, Any]) -> dict[str, Any]:
+    """Diagnostic des tables SNMP lisibles sur l'équipement (lecture seule), pour comprendre ce qui manque."""
+    from app.services.diagnose import diagnose
+
+    cfg = await all_values(db)
+    dev = (await db.execute(select(Device).where(Device.id == uuid.UUID(params["device_id"])))).scalar_one()
+    cred = (await db.execute(select(SnmpCredentialRow).where(SnmpCredentialRow.id == dev.credential_id))).scalar_one()
+    if cred.version == "v2c" and not cfg["snmp_v2c_enabled"]:
+        raise SnmpError(V2C_DISABLED)
+    try:
+        check_address(str(dev.mgmt_ip), cfg["snmp_allowed_cidrs"])
+    except TargetNotAllowed:
+        raise SnmpError(TARGET_NOT_ALLOWED) from None
+    target = SnmpTarget(
+        host=str(dev.mgmt_ip),
+        port=dev.snmp_port,
+        timeout_s=dev.timeout_ms / 1000,
+        retries=dev.retries,
+        credential=to_snmp_credential(keyring, cred),
+        context_name=dev.snmp_context,
+    )
+    async with SnmpClient(target) as client:
+        return await diagnose(client)
+
+
 async def _run_topology(db: AsyncSession, keyring: KeyRing, params: dict[str, Any]) -> dict[str, Any]:
     cfg = await all_values(db)
     dev = (await db.execute(select(Device).where(Device.id == uuid.UUID(params["device_id"])))).scalar_one()
@@ -251,6 +276,8 @@ async def process_job(db: AsyncSession, keyring: KeyRing, job_id: uuid.UUID, red
     try:
         if job.kind == "device_test":
             result = await _run_device_test(db, keyring, job.params)
+        elif job.kind == "diagnose":
+            result = await _run_diagnose(db, keyring, job.params)
         elif job.kind == "topology":
             result = await _run_topology(db, keyring, job.params)
         elif job.kind == "realtime":

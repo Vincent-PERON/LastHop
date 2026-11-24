@@ -1,0 +1,2 @@
+{"driver": "generic", "synthetic": true, "interfaces": 4, "neighbors": 1, "fdb": 3, "arp": 0,
+ "verdicts": {"Inventaire des ports": "ok", "Topologie (liaisons entre équipements)": "ok", "Apprentissage MAC → port": "partial", "Localisation en direct": "ok"}}

@@ -52,7 +52,7 @@ curl -I https://lasthop.example.org      # 200 + Strict-Transport-Security
 
 **Première connexion** : `admin` + contenu de `secrets/local_admin_password`, puis nouveau mot de passe (12 caractères minimum). Activez ensuite le TOTP (icône clé → *Mon compte*). Les fournisseurs Keycloak, Entra ID, Google Workspace et LDAP s'ajoutent dans **Authentification** (URL de redirection OIDC : `https://lasthop.example.org/api/v1/auth/oidc/callback`).
 
-**Premiers réglages** : *Paramètres* → `snmp_allowed_cidrs` (aucune cible autorisée par défaut), puis profils SNMP/SSH et équipements ([docs/SWITCH_SNMPV3.md](docs/SWITCH_SNMPV3.md)).
+**Premiers réglages** : *Paramètres* → `snmp_allowed_cidrs` (aucune cible autorisée par défaut), puis profils SNMP/SSH et équipements ([docs/SWITCH_SNMPV3.md](docs/SWITCH_SNMPV3.md)). Équipement non reconnu ou résultat incomplet : bouton *Diagnostic* de la fiche, puis [docs/ADD_DRIVER.md](docs/ADD_DRIVER.md).
 
 **Exploitation** : mise à jour `git pull && docker compose up -d --build` ; sauvegarder la base (chiffrée) et, séparément, `secrets/master_keys.json` ; mot de passe admin perdu :
 `echo -n 'nouveau-mot-de-passe' | docker compose run --rm -T api python -m app.cli local-admin-reset admin`.

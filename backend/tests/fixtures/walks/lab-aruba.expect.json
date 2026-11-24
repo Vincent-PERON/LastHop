@@ -1,0 +1,2 @@
+{"driver": "aruba_os", "interfaces": 4, "neighbors": 2, "fdb": 30, "arp": 0,
+ "verdicts": {"Topologie (liaisons entre équipements)": "ok", "Apprentissage MAC → port": "partial", "Apprentissage IP ↔ MAC (ARP)": "na", "Localisation en direct": "ok"}}

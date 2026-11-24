@@ -7,6 +7,7 @@ import PageHeader from '../src/components/PageHeader.vue'
 import DashboardView from '../src/views/DashboardView.vue'
 import DevicesView from '../src/views/DevicesView.vue'
 import DeviceView from '../src/views/DeviceView.vue'
+import DeviceDiagnostic from '../src/components/DeviceDiagnostic.vue'
 import { login, logout, makeRouter, mockFetch, flush } from './helpers.js'
 
 afterEach(logout)
@@ -122,5 +123,32 @@ describe('vues', () => {
     expect(w.text()).toContain('Informations SNMP')
     expect(w.findAll('.port-grid .tile')).toHaveLength(1)
     expect(w.text()).toContain('00:11:22:33:44:55')
+  })
+})
+
+describe('Diagnostic SNMP', () => {
+  it('lance le diagnostic et affiche conséquences, conseils et détail en texte', async () => {
+    login('admin')
+    const { calls } = mockFetch((url, init) => {
+      if (url.endsWith('/diagnose')) return [202, { job_id: 'j1' }]
+      if (url.endsWith('/jobs/j1')) return { status: 'done', result: {
+        driver: 'fortinet',
+        verdicts: [
+          { feature: 'Apprentissage IP ↔ MAC (ARP)', level: 'ok', message: 'Table ARP lue.', advice: '' },
+          { feature: 'Topologie (liaisons entre équipements)', level: 'missing', message: 'Aucun voisin LLDP/CDP.', advice: 'Activez LLDP <img src=x onerror=alert(1)>' },
+        ],
+        checks: [{ key: 'arp_media', title: 'ARP classique', status: 'ok', rows: 3, detail: '', sample: ['1.10.0.0.21 = 00:1a:2b'] }],
+      } }
+      return init.method === 'GET' ? DEVICE(1) : {}
+    })
+    const w = mount(DeviceDiagnostic, { props: { device: { id: 'd1', name: 'sw-1' } } })
+    const btn = w.findAll('button').find((b) => b.text().includes('Lancer le diagnostic'))
+    await btn.trigger('click')
+    await flush(); await flush()
+    expect(calls.some((c) => c.url.endsWith('/devices/d1/diagnose') && c.init.method === 'POST')).toBe(true)
+    expect(w.text()).toContain('fortinet')
+    expect(w.text()).toContain('Aucun voisin LLDP/CDP.')
+    expect(w.text()).toContain('<img src=x onerror=alert(1)>') // texte, jamais du HTML
+    expect(w.find('.advice img').exists()).toBe(false)
   })
 })

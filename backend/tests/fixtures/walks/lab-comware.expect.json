@@ -1,0 +1,2 @@
+{"driver": "comware", "interfaces": 4, "neighbors": 2, "fdb": 9, "arp": 8,
+ "verdicts": {"Topologie (liaisons entre équipements)": "ok", "Apprentissage MAC → port": "ok", "Apprentissage IP ↔ MAC (ARP)": "ok"}}

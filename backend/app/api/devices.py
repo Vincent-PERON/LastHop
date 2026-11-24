@@ -24,7 +24,7 @@ Writer = Annotated[Principal, Depends(require(Perm.inventory_write))]
 
 NAME = Annotated[str, Field(min_length=1, max_length=100, pattern=r"^[\w .\-()]+$")]
 SnmpContext = Annotated[str, Field(max_length=32, pattern=r"^[\w.\-]*$")]  # contextName SNMPv3 de base
-DriverName = Literal["generic", "aruba_os", "comware", "cisco_ios"]
+DriverName = Literal["generic", "aruba_os", "comware", "cisco_ios", "fortinet"]
 
 
 class DeviceIn(BaseModel):
@@ -282,6 +282,25 @@ async def test_device(device_id: uuid.UUID, request: Request, db: DbSession, p: 
         db,
         request,
         "device.test",
+        principal=p,
+        target_type="device",
+        target_id=str(d.id),
+        details={"job_id": str(job.id)},
+    )
+    await db.commit()
+    return {"job_id": str(job.id)}
+
+
+@router.post("/{device_id}/diagnose", status_code=202)
+async def diagnose_device(device_id: uuid.UUID, request: Request, db: DbSession, p: Writer) -> dict[str, str]:
+    d = (await db.execute(select(Device).where(Device.id == device_id))).scalar_one_or_none()
+    if d is None:
+        raise HTTPException(404, "Introuvable")
+    job = await create_and_dispatch(request, db, p, "diagnose", {"device_id": str(d.id)})
+    await record(
+        db,
+        request,
+        "device.diagnose",
         principal=p,
         target_type="device",
         target_id=str(d.id),

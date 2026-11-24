@@ -11,8 +11,27 @@ from app.snmp.client import SnmpClient, SnmpTarget
 
 
 class GenericDriver(Driver):
+    """Équipement inconnu : tables standard seules, avec les replis les plus tolérants (voir `docs/ADD_DRIVER.md`).
+    Voisins : LLDP puis CDP (certains équipements n'annoncent que CDP)."""
+
     name = "generic"
     vendor = "unknown"
+
+    async def collect_neighbors(self, client: SnmpClient, ifs: list[IfInfo], max_rep: int) -> list[NeighborInfo]:
+        return [*await bridge.collect_lldp(client, ifs, max_rep), *await bridge.collect_cdp(client, max_rep)]
+
+
+class FortinetDriver(Driver):
+    """FortiGate / FortiSwitch (enterprise 12356). Le FortiGate est typiquement la passerelle inter-VLAN : sa table ARP
+    (ipNetToMedia) fournit le lien IP ↔ MAC ; les ports d'accès sont lus sur les switchs. Non validé sur du matériel."""
+
+    name = "fortinet"
+    vendor = "Fortinet"
+    oid_prefixes = ("1.3.6.1.4.1.12356.",)
+
+    def parse_model(self, sys_descr: str) -> str | None:
+        m = re.search(r"\b(Forti(?:Gate|Switch|Wifi|AP)[-_ ]?[\w\-]*)", sys_descr, re.IGNORECASE)
+        return m.group(1)[:64] if m else None
 
 
 class ArubaOsDriver(Driver):

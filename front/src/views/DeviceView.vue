@@ -7,6 +7,7 @@ import StatusDot from '../components/StatusDot.vue'
 import Badge from '../components/Badge.vue'
 import ErrorBanner from '../components/ErrorBanner.vue'
 import DeviceBackups from '../components/DeviceBackups.vue'
+import DeviceDiagnostic from '../components/DeviceDiagnostic.vue'
 import PortEndpointsModal from '../components/PortEndpointsModal.vue'
 import { get, put } from '../api/client.js'
 import { can } from '../stores/session.js'
@@ -105,6 +106,8 @@ watch(() => route.params.id, load)
           <p class="hint">Cliquez sur un port pour voir ses endpoints.</p>
         </div>
       </div>
+
+      <DeviceDiagnostic v-if="device && tab === 'summary' && admin" :device="device" />
 
       <div v-if="device && tab === 'ports'" class="card">
         <h2>Ports réseau</h2>

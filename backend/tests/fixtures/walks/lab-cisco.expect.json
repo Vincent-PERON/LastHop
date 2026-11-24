@@ -1,0 +1,2 @@
+{"driver": "cisco_ios", "interfaces": 4, "neighbors": 1, "fdb": 1, "arp": 1,
+ "verdicts": {"Topologie (liaisons entre équipements)": "ok", "Apprentissage IP ↔ MAC (ARP)": "ok"}}

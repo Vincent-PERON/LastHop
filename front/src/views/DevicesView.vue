@@ -28,7 +28,7 @@ const form = reactive(empty())
 const siteName = ref('')
 const admin = () => can('inventory:write')
 
-const DRIVER = { cisco_ios: 'Cisco IOS', comware: 'HPE Comware', aruba_os: 'HPE Aruba', generic: 'Générique' }
+const DRIVER = { cisco_ios: 'Cisco IOS', comware: 'HPE Comware', aruba_os: 'HPE Aruba', fortinet: 'Fortinet', generic: 'Générique' }
 const reachable = (d) => d.last_topology_status === 'ok' || d.last_poll_status === 'ok'
 const state = (d) => (reachable(d) ? 'ok' : d.last_topology_status || d.last_poll_status ? 'bad' : 'unknown')
 

@@ -203,6 +203,15 @@ le parcours CLI (invite, pagination, commandes) a été validé contre des équi
 | QR code / secret exposés | Le QR est généré côté serveur (SVG en `data:`, autorisé par la CSP `img-src`), uniquement dans la réponse à la configuration, après réauthentification | Visible à l'écran pendant la configuration |
 Dépendances : `segno` (QR code, pure Python, sans dépendance transitive) ; `ldap3` (pure Python, sans vulnérabilité connue) n'est plus publié depuis 2021 : exposition limitée (appels sortants vers des annuaires configurés par le super admin, entrées échappées) ; à surveiller.
 
+## 3 nonies. Diagnostic SNMP et parcours hors ligne
+
+| Menace | Mesure |
+|---|---|
+| Le diagnostic comme outil de scan | Job réservé au super admin, mêmes garde-fous de cible que les autres jobs (réseaux autorisés, v2c désactivé par défaut), lecture seule (GET/walk, aucun SET), audité (`device.diagnose`) |
+| Fuite via le résultat du diagnostic | Seulement des compteurs et 3 exemples nettoyés par ligne (`as_text`), jamais d'identifiant SNMP ; rendu en texte côté interface (testé avec du HTML hostile) |
+| Données client dans les parcours de test | Outil d'anonymisation cohérent (MAC avec conservation de l'OUI, IP, noms, descriptions, séries ; sel aléatoire, irréversible) **mais relecture humaine obligatoire** (texte libre) ; les parcours restent dans le dépôt : ne jamais publier un parcours non relu |
+| Fichier de parcours hostile (CLI) | Lecture bornée, analyse tolérante sans exécution ; la commande n'ouvre aucune connexion réseau |
+
 ## 4. Menaces à traiter dans les lots suivants (déjà identifiées)
 
 - **b/d** XSS stocké via `ifAlias`/`sysName`/`ifDescr` → nettoyage à l'ingestion + échappement au rendu + CSP.

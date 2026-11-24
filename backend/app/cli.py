@@ -98,7 +98,42 @@ async def _local_admin_disable_totp(username: str) -> int:
     return 0 if ok else 1
 
 
+def _walk_anonymize(src: str, dst: str) -> int:
+    """Anonymise un snmpwalk client : MAC/IP/noms/séries remplacés de façon cohérente (voir docs/ADD_DRIVER.md)."""
+    import pathlib
+
+    from app.snmp.offline import anonymize, parse_walk, to_snmprec
+
+    walk = parse_walk(pathlib.Path(src).read_text(encoding="utf-8", errors="replace"))
+    if not walk:
+        print("Aucune ligne SNMP reconnue (attendu : sortie de `snmpwalk -On -Ox` ou fichier .snmprec)")
+        return 1
+    anon, rep = anonymize(walk)
+    pathlib.Path(dst).write_text(to_snmprec(anon), encoding="utf-8")
+    print(f"{len(anon)} lignes écrites dans {dst} : {rep.macs} MAC, {rep.ips} IP, {rep.strings} textes remplacés.")
+    print("RELISEZ le fichier avant de le transmettre : l'outil ne peut pas deviner tous les textes sensibles.")
+    return 0
+
+
+def _diagnose_walk(src: str) -> int:
+    import pathlib
+
+    from app.services.diagnose import diagnose, render_text
+    from app.snmp.offline import WalkClient, parse_walk
+
+    walk = parse_walk(pathlib.Path(src).read_text(encoding="utf-8", errors="replace"))
+    if not walk:
+        print("Aucune ligne SNMP reconnue")
+        return 1
+    print(render_text(asyncio.run(diagnose(WalkClient(walk)))))
+    return 0
+
+
 def main() -> None:
+    if len(sys.argv) == 4 and sys.argv[1] == "walk-anonymize":
+        sys.exit(_walk_anonymize(sys.argv[2], sys.argv[3]))
+    if len(sys.argv) == 3 and sys.argv[1] == "diagnose-walk":
+        sys.exit(_diagnose_walk(sys.argv[2]))
     if len(sys.argv) == 3 and sys.argv[1] == "local-admin-disable-totp":
         sys.exit(asyncio.run(_local_admin_disable_totp(sys.argv[2].lower())))
     if len(sys.argv) == 3 and sys.argv[1] == "local-admin-reset":
@@ -114,7 +149,8 @@ def main() -> None:
         sys.exit(asyncio.run(_oui_import(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8", errors="replace"))))
     print(
         "usage: python -m app.cli audit-verify | reencrypt | oui-import <oui.csv> | "
-        "local-admin-reset <utilisateur> | local-admin-disable-totp <utilisateur>"
+        "local-admin-reset <utilisateur> | local-admin-disable-totp <utilisateur> | "
+        "walk-anonymize <entrée> <sortie.snmprec> | diagnose-walk <fichier>"
     )
     sys.exit(2)
 

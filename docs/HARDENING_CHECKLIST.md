@@ -64,3 +64,6 @@ Cocher chaque ligne avant la mise en production.
 - [ ] Logs JSON centralisés ; vérifier l'absence de communities/clés/tokens (`grep -ri community`).
 - [ ] Alertes : échecs d'authentification en rafale, refus `authz.denied`, 5xx, rupture de chaîne d'audit.
 - [ ] Procédure de mise à jour : `git pull` → CI verte → `docker compose build` → `docker compose up -d` (le service `migrate` applique Alembic) → vérifier `/healthz`.
+
+## Nouveaux équipements
+- [ ] Diagnostic SNMP (fiche équipement) lancé après chaque ajout : aucune fonction « impossible » inattendue ; parcours fournis par des tiers **anonymisés et relus** avant partage ([docs/ADD_DRIVER.md](ADD_DRIVER.md)).
