@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Device, Interface, Neighbor
+from app.db.models import Device, DeviceVlan, Interface, Neighbor
 from app.drivers.models import TopologySnapshot
 
 TOPOLOGY_LOCK = (
@@ -75,12 +75,18 @@ async def persist_snapshot(db: AsyncSession, device: Device, snap: TopologySnaps
         row.name, row.descr, row.alias = info.name, info.descr or None, info.alias or None
         row.if_type, row.oper_status, row.bridge_port = info.if_type, info.oper_status, info.bridge_port
         row.is_trunk = info.if_index in snap.trunk_if_indexes
+        pv = snap.port_vlans.get(info.if_index)
+        row.pvid, row.port_mode = (pv.pvid, pv.mode) if pv else (None, None)
+        row.tagged_vlans = list(pv.tagged) if pv else []
         row.mac_count = snap.mac_counts.get(info.if_index, 0)
         row.updated_at = now
         if info.if_index not in existing:
             db.add(row)
             existing[info.if_index] = row
         seen.add(info.if_index)
+    await db.execute(delete(DeviceVlan).where(DeviceVlan.device_id == device.id))
+    for vid, vname in snap.vlans.items():
+        db.add(DeviceVlan(device_id=device.id, vlan_id=vid, name=vname))
     for idx in set(existing) - seen:  # interfaces disparues (le surcharge manuel disparaît avec elles)
         await db.delete(existing.pop(idx))
     await db.flush()

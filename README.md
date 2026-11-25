@@ -54,6 +54,8 @@ curl -I https://lasthop.example.org      # 200 + Strict-Transport-Security
 
 **Premiers réglages** : *Paramètres* → `snmp_allowed_cidrs` (aucune cible autorisée par défaut), puis profils SNMP/SSH et équipements ([docs/SWITCH_SNMPV3.md](docs/SWITCH_SNMPV3.md)). Équipement non reconnu ou résultat incomplet : bouton *Diagnostic* de la fiche, puis [docs/ADD_DRIVER.md](docs/ADD_DRIVER.md).
 
+**Modifier un port** (VLAN, PVID, accès/trunk) : désactivé par défaut. *Paramètres* → `port_config_enabled`, puis fiche équipement → onglet *Ports* → *Configurer* (aperçu des commandes et confirmation obligatoires ; confirmation renforcée sur un uplink). Nécessite un profil SSH autorisé à configurer ; essayez d'abord sur un port de test.
+
 **Exploitation** : mise à jour `git pull && docker compose up -d --build` ; sauvegarder la base (chiffrée) et, séparément, `secrets/master_keys.json` ; mot de passe admin perdu :
 `echo -n 'nouveau-mot-de-passe' | docker compose run --rm -T api python -m app.cli local-admin-reset admin`.
 

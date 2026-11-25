@@ -5,7 +5,7 @@ import re
 from dataclasses import replace
 
 from app.drivers.base import Driver
-from app.drivers.models import FdbInfo, IfInfo, LiveHit, NeighborInfo
+from app.drivers.models import FdbInfo, IfInfo, LiveHit, NeighborInfo, PortVlans
 from app.snmp import bridge
 from app.snmp.client import SnmpClient, SnmpTarget
 
@@ -70,6 +70,14 @@ class CiscoIosDriver(Driver):
     async def collect_neighbors(self, client: SnmpClient, ifs: list[IfInfo], max_rep: int) -> list[NeighborInfo]:
         # CDP en priorité (natif Cisco) puis LLDP ; les doublons sont fusionnés à l'enregistrement
         return [*await bridge.collect_cdp(client, max_rep), *await bridge.collect_lldp(client, ifs, max_rep)]
+
+    async def collect_vlans(self, client: SnmpClient, max_rep: int) -> dict[int, str]:
+        return await bridge.collect_cisco_vlans(client, max_rep)
+
+    async def collect_port_vlans(
+        self, client: SnmpClient, ifs: list[IfInfo], trunks: set[int], max_rep: int
+    ) -> dict[int, PortVlans]:
+        return await bridge.collect_cisco_port_vlans(client, ifs, trunks, max_rep)
 
     async def collect_trunks(
         self, client: SnmpClient, ifs: list[IfInfo], min_tagged_vlans: int, max_rep: int

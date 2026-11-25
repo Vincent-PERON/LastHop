@@ -6,7 +6,7 @@ import ipaddress
 import re
 from collections import defaultdict
 
-from app.drivers.models import IfInfo, NeighborInfo
+from app.drivers.models import IfInfo, NeighborInfo, PortVlans
 from app.snmp import oids
 from app.snmp.client import AUTH_FAILURE, TIMEOUT, SnmpClient, SnmpError, SnmpValue, as_text
 
@@ -128,6 +128,72 @@ async def collect_qbridge_trunks(
             if bp in by_bp:
                 tagged_in[by_bp[bp]] += 1
     return {idx for idx, n in tagged_in.items() if n >= min_tagged_vlans}
+
+
+async def collect_vlans(client: SnmpClient, max_rep: int = 25) -> dict[int, str]:
+    """VLAN connus de l'équipement (Q-BRIDGE dot1qVlanStatic) : id -> nom. Repli : table d'appartenance."""
+    names = await optional(client, oids.DOT1Q_VLAN_STATIC_NAME, max_rep)
+    out = {int(k): as_text(v, 64) for k, v in names.items() if k.isdigit() and 1 <= int(k) <= 4094}
+    if not out:
+        egress = await optional(client, oids.DOT1Q_VLAN_STATIC_EGRESS, max_rep)
+        out = {int(k): "" for k in egress if k.isdigit() and 1 <= int(k) <= 4094}
+    return out
+
+
+async def collect_port_vlans(
+    client: SnmpClient, ifs: list[IfInfo], trunks: set[int], max_rep: int = 25
+) -> dict[int, PortVlans]:
+    """PVID, VLAN untagged et tagged de chaque port (Q-BRIDGE). `trunks` : ifIndex déjà détectés comme trunks."""
+    egress = await optional(client, oids.DOT1Q_VLAN_STATIC_EGRESS, max_rep)
+    untagged = await optional(client, oids.DOT1Q_VLAN_STATIC_UNTAGGED, max_rep)
+    pvids = await optional(client, oids.DOT1Q_PVID, max_rep)
+    by_bp = {i.bridge_port: i.if_index for i in ifs if i.bridge_port is not None}
+    tag: dict[int, set[int]] = defaultdict(set)
+    untag: dict[int, set[int]] = defaultdict(set)
+    for vlan, e in egress.items():
+        if not isinstance(e, bytes) or not vlan.isdigit():
+            continue
+        u = untagged.get(vlan)
+        u_ports = bits_set(u) if isinstance(u, bytes) else set()
+        for bp in bits_set(e):
+            if bp in by_bp:
+                (untag if bp in u_ports else tag)[by_bp[bp]].add(int(vlan))
+    out: dict[int, PortVlans] = {}
+    for i in ifs:
+        if i.bridge_port is None or (not egress and not pvids):
+            continue  # pas d'information VLAN : on ne devine rien
+        pv = pvids.get(str(i.bridge_port))
+        tagged_ids, untagged_ids = sorted(tag.get(i.if_index, ())), sorted(untag.get(i.if_index, ()))
+        mode = "trunk" if i.if_index in trunks else ("hybrid" if tagged_ids else "access")
+        pvid = pv if isinstance(pv, int) and pv > 0 else (untagged_ids[0] if len(untagged_ids) == 1 else None)
+        out[i.if_index] = PortVlans(pvid=pvid, mode=mode, tagged=tuple(tagged_ids), untagged=tuple(untagged_ids))
+    return out
+
+
+async def collect_cisco_vlans(client: SnmpClient, max_rep: int = 25) -> dict[int, str]:
+    ids = await collect_vtp_vlans(client, max_rep)
+    names = await optional(client, oids.VTP_VLAN_NAME, max_rep)
+    by_id = {int(k.split(".")[-1]): as_text(v, 64) for k, v in names.items() if k.split(".")[-1].isdigit()}
+    return {v: by_id.get(v, "") for v in ids}
+
+
+async def collect_cisco_port_vlans(
+    client: SnmpClient, ifs: list[IfInfo], trunks: set[int], max_rep: int = 25
+) -> dict[int, PortVlans]:
+    """IOS : VLAN d'accès (vmVlan) ou VLAN natif du trunk ; les VLAN autorisés d'un trunk ne sont pas lus (inconnus)."""
+    vm = await optional(client, oids.CISCO_VM_VLAN, max_rep)
+    native = await optional(client, oids.CISCO_TRUNK_NATIVE, max_rep)
+    out: dict[int, PortVlans] = {}
+    for i in ifs:
+        key = str(i.if_index)
+        if i.if_index in trunks:
+            nv = native.get(key)
+            out[i.if_index] = PortVlans(pvid=nv if isinstance(nv, int) else None, mode="trunk")
+        else:
+            access = vm.get(key)
+            if isinstance(access, int):
+                out[i.if_index] = PortVlans(pvid=access, mode="access", untagged=(access,))
+    return out
 
 
 # ----------------------------------------------------------------------------------- LLDP / CDP

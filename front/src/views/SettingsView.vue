@@ -10,6 +10,7 @@ const error = ref('')
 const saved = ref('')
 
 const LABELS = {
+  port_config_enabled: ['Autoriser la modification des ports', 'Désactivé par défaut. Permet au super admin de changer le VLAN, le PVID et le mode accès/trunk d’un port depuis LastHop (commandes envoyées par SSH, aperçu et confirmation obligatoires).'],
   snmp_v2c_enabled: ['SNMP v2c autorisé', 'Désactivé par défaut : v3 authPriv est recommandé.'],
   snmp_allowed_cidrs: ['Réseaux SNMP autorisés (un CIDR par ligne)', 'Aucune cible n’est interrogeable tant que cette liste est vide.'],
   uplink_mac_threshold: ['Seuil de MAC par port (uplink)', 'Au-delà, un port est classé uplink.'],

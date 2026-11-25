@@ -84,6 +84,39 @@ describe('vues', () => {
     expect(w.findAll('tbody tr')).toHaveLength(1)
   })
 
+  it('ajout d’équipement dans une fenêtre modale : ouverture, erreur conservée, création puis fermeture', async () => {
+    login('admin')
+    mockFetch((url, init) => {
+      if (init.method === 'POST' && url === '/api/v1/devices') return calls0.fail ? [422, { detail: 'IP invalide' }] : [201, { id: 'new' }]
+      if (url === '/api/v1/credentials') return [{ id: 'c1', name: 'lab', version: 'v3' }]
+      return url === '/api/v1/devices' ? [200, [DEVICE(1)]] : [200, []]
+    })
+    const calls0 = { fail: true }
+    const router = await makeRouter('/devices')
+    const w = mount(DevicesView, { global: { plugins: [router] }, attachTo: document.body })
+    await flush(); await flush()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    await w.findAll('button').find((b) => b.text().includes('Ajouter un équipement')).trigger('click')
+    await flush()
+    const dlg = document.body.querySelector('[role="dialog"]')
+    expect(dlg).not.toBeNull()
+    const set = async (label, v) => {
+      const el = [...dlg.querySelectorAll('label')].find((l) => l.textContent.includes(label)).querySelector('input,select')
+      el.value = v; el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input')); await flush()
+    }
+    await set('Nom', 'sw-new'); await set('IP de management', '10.0.0.9'); await set('Profil SNMP', 'c1')
+    dlg.querySelector('form').dispatchEvent(new Event('submit'))
+    await flush(); await flush()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull() // échec : la fenêtre reste ouverte
+    expect(dlg.textContent).toContain('IP invalide')
+    expect(dlg.querySelector('input').value).toBe('sw-new') // saisie conservée
+    calls0.fail = false
+    dlg.querySelector('form').dispatchEvent(new Event('submit'))
+    await flush(); await flush()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    w.unmount()
+  })
+
   it('un viewer ne voit aucune action d’administration', async () => {
     login('viewer')
     mockFetch(() => [200, [DEVICE(1)]])

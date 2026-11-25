@@ -164,6 +164,32 @@ class CliSession:
                     body = body[1:]
                 return "\n".join(body).strip("\n")
 
+    async def run_any(self, command: str, wait_s: float | None = None) -> str:
+        """Comme `run`, mais l'invite peut CHANGER (mode configuration, contexte d'interface) : on attend n'importe quelle
+        invite valide du profil. Utilisé uniquement par la modification de port (services/port_config_job.py)."""
+        self.proc.stdin.write((command + "\n").encode())
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + (wait_s if wait_s is not None else COMMAND_TIMEOUT)
+        raw = ""
+        while True:
+            left = deadline - loop.time()
+            if left <= 0:
+                raise BackupError("CLI_TIMEOUT", f"commande « {command} » sans réponse complète")
+            try:
+                raw += await self._read(left)
+            except TimeoutError:
+                raise BackupError("CLI_TIMEOUT", f"commande « {command} » sans réponse complète") from None
+            if len(raw) > MAX_BYTES:
+                raise BackupError("BACKUP_TOO_LARGE", "sortie trop volumineuse")
+            lines = cli.clean(raw).split("\n")
+            last = lines[-1].strip()
+            if len(lines) > 1 and last and self.profile.prompt.match(last):
+                self.prompt = last
+                body = lines[:-1]
+                if body and command.strip() in body[0]:
+                    body = body[1:]
+                return "\n".join(body).strip("\n")
+
 
 @dataclass
 class Fetched:

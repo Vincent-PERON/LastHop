@@ -212,6 +212,23 @@ Dépendances : `segno` (QR code, pure Python, sans dépendance transitive) ; `ld
 | Données client dans les parcours de test | Outil d'anonymisation cohérent (MAC avec conservation de l'OUI, IP, noms, descriptions, séries ; sel aléatoire, irréversible) **mais relecture humaine obligatoire** (texte libre) ; les parcours restent dans le dépôt : ne jamais publier un parcours non relu |
 | Fichier de parcours hostile (CLI) | Lecture bornée, analyse tolérante sans exécution ; la commande n'ouvre aucune connexion réseau |
 
+## 3 decies. Modification de la configuration des ports (écriture sur les équipements)
+
+Jusqu'ici LastHop était **strictement en lecture** (SNMP get/walk, SSH en commandes d'affichage). La modification d'un port (VLAN, PVID,
+accès/trunk) est la **seule exception**, volontairement cloisonnée : SNMP reste sans SET ; les commandes de configuration n'existent que dans
+`services/port_config.py` et `port_config_job.py` (un test échoue si elles apparaissent ailleurs).
+
+| Menace | Mesure |
+|---|---|
+| Utilisation abusive / erreur d'un administrateur | **Désactivé par défaut** (`port_config_enabled`) ; super admin seul (`ports:configure`) ; **aperçu obligatoire** (commandes exactes + état actuel) ; chaque aperçu, application et résultat audités avec les commandes |
+| VLAN inexistant ou saisie libre | Seuls les VLAN **lus sur l'équipement** (SNMP) sont acceptés, validés côté serveur (jamais confiance à l'interface) ; aucune collecte = refus |
+| Couper le réseau (uplink, trunk, cœur) | Alertes « danger » (uplink/voisin réseau, trunk → accès, VLAN natif modifié, VLAN retirés, cœur/distribution, nombreuses MAC) imposant la **saisie exacte du nom du port** ; vérifié côté serveur |
+| Aperçu périmé / rejeu | Aperçu à usage unique, 10 min, lié à l'utilisateur et au port ; à l'application les commandes sont **recalculées** : si l'état du port a changé depuis l'aperçu, rien n'est envoyé |
+| Équipement qui refuse une commande | Arrêt à la première erreur, sortie du mode configuration, **aucun enregistrement** ; message humain + détail |
+| Injection de commande | Aucune saisie libre dans les commandes : VLAN = entiers 1-4094 vérifiés, nom de port = valeur lue sur l'équipement ; commandes construites par gabarits fixes |
+| Privilèges SSH | Le profil SSH doit désormais avoir le droit de configurer : voir la checklist (compte dédié, autorisation de commandes TACACS+/RADIUS limitée à `interface`, `vlan`, `switchport`/`port`, `write`) |
+Résiduel : la session SSH de LastHop peut passer par le port modifié (pas de retour arrière automatique fiable à distance) ; les syntaxes (AOS-CX, ArubaOS-Switch, Comware, Cisco IOS) sont écrites d'après la documentation et **non validées sur du matériel réel** : à essayer d'abord sur un port de test hors production.
+
 ## 4. Menaces à traiter dans les lots suivants (déjà identifiées)
 
 - **b/d** XSS stocké via `ifAlias`/`sysName`/`ifDescr` → nettoyage à l'ingestion + échappement au rendu + CSP.

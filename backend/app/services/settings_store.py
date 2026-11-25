@@ -14,6 +14,10 @@ from app.security.targets import validate_cidr_list
 # clé -> (type validé strictement, valeur par défaut)
 SCHEMA: dict[str, tuple[Any, Any]] = {
     "snmp_v2c_enabled": (bool, False),  # v2c désactivé par défaut
+    "port_config_enabled": (
+        bool,
+        False,
+    ),  # modification des ports (VLAN/PVID/mode) : désactivée tant que l'admin ne l'active pas
     "snmp_allowed_cidrs": (  # aucune cible SNMP autorisée tant que l'admin n'a rien déclaré
         Annotated[list[str], Field(max_length=64), AfterValidator(validate_cidr_list)],
         [],

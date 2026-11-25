@@ -7,6 +7,7 @@ import StatusDot from '../components/StatusDot.vue'
 import PortBar from '../components/PortBar.vue'
 import Pager from '../components/Pager.vue'
 import Badge from '../components/Badge.vue'
+import Modal from '../components/Modal.vue'
 import ErrorBanner from '../components/ErrorBanner.vue'
 import { get, post, del } from '../api/client.js'
 import { can } from '../stores/session.js'
@@ -20,6 +21,7 @@ const credentials = ref([])
 const error = ref('')
 const notice = ref('')
 const showForm = ref(false)
+const formError = ref('')
 const filter = ref('')
 const limit = ref(10)
 const offset = ref(0)
@@ -69,15 +71,21 @@ async function runJob(d, path, label) {
   }
 }
 
+function openForm() {
+  Object.assign(form, empty())
+  formError.value = ''
+  showForm.value = true
+}
+
 async function create() {
-  error.value = ''
+  formError.value = ''
   try {
     await post('/api/v1/devices', { ...form, site_id: form.site_id || null, snmp_port: Number(form.snmp_port) })
     Object.assign(form, empty())
     showForm.value = false
     await load()
   } catch (e) {
-    error.value = e.message
+    formError.value = e.message // l'erreur s'affiche dans la fenêtre : la saisie n'est pas perdue
   }
 }
 
@@ -120,27 +128,45 @@ onMounted(load)
             <input v-model.trim="siteName" required maxlength="100" placeholder="Nouveau site" aria-label="Nom du nouveau site" />
             <button type="submit" class="ghost">Créer le site</button>
           </form>
-          <button type="button" @click="showForm = !showForm">{{ showForm ? 'Fermer' : '＋ Ajouter un équipement' }}</button>
+          <button type="button" @click="openForm">＋ Ajouter un équipement</button>
         </template>
       </div>
 
-      <form v-if="showForm" class="card form-grid" @submit.prevent="create">
-        <label>Nom<input v-model.trim="form.name" required maxlength="100" /></label>
-        <label>IP de management<input v-model.trim="form.mgmt_ip" required maxlength="45" placeholder="10.20.0.11" /></label>
-        <label>Rôle
-          <select v-model="form.role"><option value="core">cœur</option><option value="distribution">distribution</option><option value="access">accès</option></select>
-        </label>
-        <label>Site
-          <select v-model="form.site_id"><option value="">—</option><option v-for="s in sites" :key="s.id" :value="s.id">{{ s.name }}</option></select>
-        </label>
-        <label>Profil SNMP
-          <select v-model="form.credential_id" required><option value="" disabled>Choisir…</option><option v-for="c in credentials" :key="c.id" :value="c.id">{{ c.name }} ({{ c.version }})</option></select>
-        </label>
-        <label>Port SNMP<input v-model="form.snmp_port" type="number" min="1" max="65535" /></label>
-        <label class="check"><input v-model="form.is_l2" type="checkbox" /> Switch (FDB)</label>
-        <label class="check"><input v-model="form.is_l3" type="checkbox" /> Routeur (ARP)</label>
-        <button type="submit">Créer</button>
-      </form>
+      <Modal v-if="showForm" title="Ajouter un équipement" @close="showForm = false">
+        <form autocomplete="off" @submit.prevent="create">
+          <ErrorBanner :message="formError" />
+          <div class="form-grid">
+            <label>Nom<input v-model.trim="form.name" required maxlength="100" /></label>
+            <label>IP de management<input v-model.trim="form.mgmt_ip" required maxlength="45" placeholder="10.20.0.11" /></label>
+            <label>Rôle
+              <select v-model="form.role"><option value="core">cœur</option><option value="distribution">distribution</option><option value="access">accès</option></select>
+            </label>
+            <label>Site
+              <select v-model="form.site_id"><option value="">—</option><option v-for="s in sites" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+            </label>
+            <label>Profil SNMP
+              <select v-model="form.credential_id" required><option value="" disabled>Choisir…</option><option v-for="c in credentials" :key="c.id" :value="c.id">{{ c.name }} ({{ c.version }})</option></select>
+            </label>
+            <label>Port SNMP<input v-model="form.snmp_port" type="number" min="1" max="65535" /></label>
+          </div>
+          <fieldset class="functions">
+            <legend>Ce que fait cet équipement</legend>
+            <label class="check opt">
+              <input v-model="form.is_l2" type="checkbox" />
+              <span><strong>Il connecte des postes (switch)</strong><small>LastHop lit sa table des adresses MAC pour savoir sur quel port chaque poste est branché.</small></span>
+            </label>
+            <label class="check opt">
+              <input v-model="form.is_l3" type="checkbox" />
+              <span><strong>Il route les VLAN (routeur, pare-feu, cœur de réseau)</strong><small>LastHop lit sa table ARP pour associer chaque adresse IP à une adresse MAC. Cochez-le pour votre FortiGate.</small></span>
+            </label>
+            <p class="hint">Cochez les deux cases pour un switch de niveau 3 qui fait aussi le routage.</p>
+          </fieldset>
+          <div class="modal-foot end">
+            <button type="button" class="ghost" @click="showForm = false">Annuler</button>
+            <button type="submit">Créer</button>
+          </div>
+        </form>
+      </Modal>
 
       <div class="table-wrap">
         <table>
@@ -171,7 +197,7 @@ onMounted(load)
                 <span v-if="admin()" class="row-icons">
                   <button type="button" class="link" title="Tester SNMP" aria-label="Tester SNMP" @click="runJob(d, 'test', 'Test SNMP')"><Icon name="play" :size="17" /></button>
                   <button type="button" class="link" title="Collecter la topologie" aria-label="Collecter la topologie" @click="runJob(d, 'topology', 'Topologie')"><Icon name="network" :size="17" /></button>
-                  <button type="button" class="link" title="Learning (ARP/FDB)" aria-label="Learning" @click="runJob(d, 'learn', 'Learning')"><Icon name="refresh" :size="17" /></button>
+                  <button type="button" class="link" title="Apprentissage des adresses MAC et IP" aria-label="Learning" @click="runJob(d, 'learn', 'Learning')"><Icon name="refresh" :size="17" /></button>
                   <button v-if="can('backups:run')" type="button" class="link" title="Sauvegarder la configuration" aria-label="Sauvegarder" @click="runJob(d, 'backup', 'Sauvegarde')"><Icon name="backup" :size="17" /></button>
                   <button type="button" class="link" title="Supprimer" aria-label="Supprimer" @click="remove(d)"><Icon name="trash" :size="17" /></button>
                 </span>

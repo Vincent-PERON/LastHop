@@ -29,6 +29,16 @@ class NeighborInfo:
     is_network_device: bool
 
 
+@dataclass(frozen=True)
+class PortVlans:
+    """VLAN d'un port lu sur l'équipement. `mode` : access | trunk | hybrid (untagged + quelques VLAN tagués)."""
+
+    pvid: int | None
+    mode: str
+    tagged: tuple[int, ...] = ()
+    untagged: tuple[int, ...] = ()
+
+
 @dataclass
 class TopologySnapshot:
     chassis_mac: str | None
@@ -37,6 +47,8 @@ class TopologySnapshot:
     trunk_if_indexes: set[int] = field(default_factory=set)
     mac_counts: dict[int, int] = field(default_factory=dict)
     sys_name: str | None = None
+    vlans: dict[int, str] = field(default_factory=dict)  # VLAN connus de l'équipement : id -> nom
+    port_vlans: dict[int, PortVlans] = field(default_factory=dict)  # ifIndex -> VLAN du port
 
 
 @dataclass(frozen=True)

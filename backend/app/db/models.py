@@ -223,6 +223,16 @@ class Job(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class DeviceVlan(Base):
+    """VLAN connus d'un équipement : seuls ceux-ci peuvent être attribués à un de ses ports."""
+
+    __tablename__ = "device_vlans"
+
+    device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True)
+    vlan_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), default="", server_default="")
+
+
 class Interface(Base):
     __tablename__ = "interfaces"
     __table_args__ = (UniqueConstraint("device_id", "if_index"),)
@@ -238,6 +248,9 @@ class Interface(Base):
     oper_status: Mapped[int | None] = mapped_column(Integer)
     is_trunk: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     mac_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    pvid: Mapped[int | None] = mapped_column(Integer)  # VLAN non étiqueté du port (lu par SNMP)
+    port_mode: Mapped[str | None] = mapped_column(String(8))  # access | trunk | hybrid
+    tagged_vlans: Mapped[list[int]] = mapped_column(JSONB, default=list, server_default="[]")
     role_detected: Mapped[str] = mapped_column(String(8), default="access", server_default="access")
     role_reason: Mapped[str | None] = mapped_column(
         String(16)

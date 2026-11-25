@@ -32,6 +32,11 @@ PORT = {
     "no_startup": 2212,
     "other_key": 2215,
     "slow": 2216,
+    "cfg_cisco": 2217,  # modification de port : un faux équipement par syntaxe (test_port_config_api.py)
+    "cfg_comware": 2218,
+    "cfg_cx": 2219,
+    "cfg_os": 2220,
+    "cfg_reject": 2221,
 }
 
 

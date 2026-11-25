@@ -9,6 +9,7 @@ import ErrorBanner from '../components/ErrorBanner.vue'
 import DeviceBackups from '../components/DeviceBackups.vue'
 import DeviceDiagnostic from '../components/DeviceDiagnostic.vue'
 import PortEndpointsModal from '../components/PortEndpointsModal.vue'
+import PortConfigModal from '../components/PortConfigModal.vue'
 import { get, put } from '../api/client.js'
 import { can } from '../stores/session.js'
 import { dt, ROLE_LABEL, RUN_STATUS } from '../utils/format.js'
@@ -20,6 +21,9 @@ const runs = ref([])
 const error = ref('')
 const picked = ref('')
 const modalPort = ref(null) // port dont on affiche les endpoints (fenêtre modale)
+const cfgPort = ref(null) // port en cours de configuration (fenêtre modale)
+const canConfigure = can('ports:configure')
+const MODE = { access: 'Accès', trunk: 'Trunk', hybrid: 'Hybride' }
 const admin = can('inventory:write')
 
 const tab = computed(() => (typeof route.query.tab === 'string' ? route.query.tab : 'summary'))
@@ -113,7 +117,7 @@ watch(() => route.params.id, load)
         <h2>Ports réseau</h2>
         <div class="table-wrap">
           <table>
-            <thead><tr><th scope="col">Index</th><th scope="col">État</th><th scope="col">Nom</th><th scope="col">Description</th><th scope="col">Rôle</th><th scope="col">MAC apprises</th><th scope="col">Voisin</th><th scope="col">Port voisin</th><th scope="col"></th></tr></thead>
+            <thead><tr><th scope="col">Index</th><th scope="col">État</th><th scope="col">Nom</th><th scope="col">Description</th><th scope="col">Rôle</th><th scope="col">Mode</th><th scope="col">VLAN (PVID)</th><th scope="col">MAC apprises</th><th scope="col">Voisin</th><th scope="col">Port voisin</th><th scope="col"></th></tr></thead>
             <tbody>
               <tr v-for="p in rows" :key="p.id">
                 <td>{{ p.if_index }}</td>
@@ -127,12 +131,14 @@ watch(() => route.params.id, load)
                     <option value="">auto</option><option value="access">accès</option><option value="uplink">uplink</option>
                   </select>
                 </td>
+                <td>{{ MODE[p.port_mode] || '—' }}</td>
+                <td>{{ p.pvid ?? '—' }}<small v-if="p.tagged_vlans?.length" class="hint"> + {{ p.tagged_vlans.join(', ') }}</small></td>
                 <td>{{ p.mac_count }}</td>
                 <td>{{ p.neighbors.map((n) => n.sysname).filter(Boolean).join(', ') || '—' }}</td>
                 <td>{{ p.neighbors.map((n) => n.port).filter(Boolean).join(', ') || '—' }}</td>
-                <td><button type="button" class="ghost" :aria-label="`Voir les endpoints du port ${p.name}`" @click="modalPort = p">Endpoints</button></td>
+                <td><button type="button" class="ghost" :aria-label="`Voir les endpoints du port ${p.name}`" @click="modalPort = p">Endpoints</button><button v-if="canConfigure" type="button" class="ghost" :aria-label="`Configurer le port ${p.name}`" @click="cfgPort = p">Configurer</button></td>
               </tr>
-              <tr v-if="!rows.length"><td class="empty" colspan="9">Aucun port : lancez une collecte de topologie.</td></tr>
+              <tr v-if="!rows.length"><td class="empty" colspan="11">Aucun port : lancez une collecte de topologie.</td></tr>
             </tbody>
           </table>
         </div>
@@ -157,6 +163,7 @@ watch(() => route.params.id, load)
         </div>
       </div>
     </section>
+    <PortConfigModal v-if="cfgPort && device" :device="device" :port="cfgPort" @close="cfgPort = null" @changed="load" />
     <PortEndpointsModal v-if="modalPort && device" :device="device" :port="modalPort" @close="modalPort = null" />
   </div>
 </template>

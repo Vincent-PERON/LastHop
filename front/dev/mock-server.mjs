@@ -6,7 +6,7 @@ const ROLE = process.env.MOCK_ROLE || 'admin'
 const PERMS = {
   viewer: ['search', 'topology:read'],
   operator: ['search', 'topology:read', 'realtime', 'export'],
-  admin: ['inventory:read', 'inventory:write', 'credentials:write', 'backups:read', 'backups:run', 'tokens:manage', 'auth:manage', 'topology:read', 'search', 'realtime', 'export', 'audit:read', 'settings:write', 'users:read'],
+  admin: ['inventory:read', 'inventory:write', 'credentials:write', 'backups:read', 'backups:run', 'tokens:manage', 'auth:manage', 'ports:configure', 'topology:read', 'search', 'realtime', 'export', 'audit:read', 'settings:write', 'users:read'],
 }[ROLE]
 
 const sites = [{ id: 's1', name: 'Siège' }]
@@ -96,6 +96,13 @@ http.createServer(async (req, res) => {
   const p = url.pathname
   const q = url.searchParams
   // --- authentification factice : démarre déconnecté (MOCK_LOGGED=1 pour démarrer connecté ; MOCK_MUST_CHANGE=1 : mot de passe à changer)
+  if (p.match(/^\/api\/v1\/devices\/[\w-]+\/vlans$/)) return send(res, 200, [{ id: 1, name: 'default' }, { id: 10, name: 'USERS' }, { id: 20, name: 'VOICE' }, { id: 30, name: 'MGMT' }])
+  if ((m0 = p.match(/^\/api\/v1\/interfaces\/([\w-]+)\/port-config\/preview$/)) && req.method === 'POST') {
+    const b = await readJson(req)
+    const uplink = m0[1] === 'p1'
+    return send(res, 200, { plan_id: 'mock-plan-token-0123456789', device: { name: 'sw-access-aruba-01', role: 'access' }, port: { id: m0[1], name: uplink ? '1' : '3' }, current: { mode: uplink ? 'trunk' : 'access', pvid: uplink ? 1 : 10, tagged: uplink ? [10, 20] : [] }, desired: b, commands: ['configure', b.mode === 'access' ? `vlan ${b.access_vlan} untagged ${uplink ? 1 : 3}` : `vlan ${b.native_vlan} untagged 1`, 'end'], save_commands: b.save ? ['write memory'] : [], alerts: uplink ? [{ level: 'danger', text: 'Le port 1 est un port d’UPLINK vers sw-dist-comware-01 : une erreur peut couper l’accès à cet équipement.' }, { level: 'info', text: 'La session SSH de LastHop peut elle-même passer par ce port.' }] : [{ level: 'warn', text: '31 poste(s) actuellement connecté(s) : ils changeront de VLAN.' }, { level: 'info', text: 'La session SSH de LastHop peut elle-même passer par ce port.' }], requires_ack: uplink, ack_phrase: uplink ? '1' : null, expires_in: 600 })
+  }
+  if (p.match(/^\/api\/v1\/interfaces\/[\w-]+\/port-config\/apply$/) && req.method === 'POST') { jobs.set('pc1', { id: 'pc1', status: 'done', result: { ok: true, saved: true, message: 'Modification appliquée.', steps: [{ command: 'configure', output: '' }, { command: 'vlan 20 untagged 3', output: '' }, { command: 'write memory', output: '' }] } }); return send(res, 202, { job_id: 'pc1' }) }
   if (p === '/api/v1/auth/providers') return send(res, 200, { local: true, providers: authProviders.filter((x) => x.enabled).map(({ id, name, kind, preset }) => ({ id, name, kind, preset })) })
   if (p === '/api/v1/auth/local/login' && req.method === 'POST') {
     const b = await readJson(req)

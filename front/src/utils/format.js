@@ -28,7 +28,7 @@ export const ROLE_LABEL = { access: 'accès', uplink: 'uplink', core: 'cœur', d
 
 export const ERROR_LABEL = {
   GATEWAY_NOT_MANAGED: 'Passerelle non gérée',
-  IP_NOT_IN_ARP: 'IP absente de l’ARP',
+  IP_NOT_IN_ARP: 'IP absente de la table ARP du routeur',
   MAC_AGED_OUT: 'MAC expirée',
   DEVICE_UNREACHABLE: 'Équipement injoignable',
   SNMP_AUTH_FAILURE: 'Échec d’authentification SNMP',

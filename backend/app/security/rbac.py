@@ -22,6 +22,9 @@ class Perm(enum.StrEnum):
     users_read = "users:read"
     backups_read = "backups:read"  # contenu des configurations : très sensible, administrateurs seulement
     backups_run = "backups:run"
+    ports_configure = (
+        "ports:configure"  # MODIFIER la configuration d'un port (VLAN, PVID, mode) : super admin uniquement
+    )
     auth_manage = "auth:manage"  # fournisseurs d'identité (OIDC, LDAP) : super admin uniquement
     tokens_manage = "tokens:manage"  # création / liste / révocation des tokens d'API : super admin uniquement
 

@@ -102,7 +102,7 @@ label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.82rem;
 .card > h2:first-child { margin-top: 0; }
 fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); } legend { color: var(--fg-2); font-weight: 600; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; align-items: end; }
-.toolbar { display: flex; gap: 0.75rem; align-items: center; margin: 0.6rem 0; flex-wrap: wrap; } .toolbar .grow { flex: 1; }
+.toolbar { display: flex; gap: 0.75rem; align-items: flex-end; margin: 0.6rem 0 1rem; flex-wrap: wrap; } .toolbar > *, .toolbar .inline > * { margin: 0; } .toolbar input, .toolbar .inline button, .toolbar > button { height: 44px; } .toolbar .inline { align-items: flex-end; } .toolbar .grow { flex: 1; }
 
 /* ---- Tableaux ---- */
 .table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -205,3 +205,11 @@ body.modal-open { overflow: hidden; }
   .topbar { padding: 0 1rem; } .band, .content { padding-left: 1rem; padding-right: 1rem; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+.functions { margin: 0.9rem 0 0; padding: 0.8rem 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.check.opt { align-items: flex-start; } .check.opt input { margin-top: 0.25rem; flex-shrink: 0; } .check.opt span { display: flex; flex-direction: column; gap: 0.1rem; } .check.opt small { color: var(--muted); font-size: 0.8rem; }
+.alerts { list-style: none; padding: 0; margin: 0.6rem 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.alerts li { padding: 0.55rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.86rem; border-left: 4px solid var(--line); background: var(--hover); }
+.alerts .alert-danger { background: var(--bad-soft); color: var(--bad-text); border-left-color: var(--bad); } .alerts .alert-warn { background: var(--warn-soft); color: var(--warn-text); border-left-color: var(--warn); }
+.confirm-danger { border: 2px solid var(--bad); border-radius: var(--radius-sm); padding: 0.7rem 0.9rem; margin: 0.8rem 0; background: var(--bad-soft); } .confirm-danger input { width: 100%; margin-top: 0.3rem; }
+button.danger-solid { background: var(--bad); border-color: var(--bad); color: #fff; } button.danger-solid:hover:not(:disabled) { background: var(--bad-text); border-color: var(--bad-text); }
+.vlan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.4rem 1rem; } .pc-form { display: flex; flex-direction: column; gap: 0.9rem; } ol.steps { padding-left: 1.2rem; }

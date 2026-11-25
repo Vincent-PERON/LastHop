@@ -6,7 +6,7 @@ import { session, setMe, clearSession } from '../src/stores/session.js'
 export const PERMS = {
   viewer: ['search', 'topology:read'],
   operator: ['search', 'topology:read', 'realtime', 'export'],
-  admin: ['inventory:read', 'inventory:write', 'credentials:write', 'backups:read', 'backups:run', 'tokens:manage', 'auth:manage', 'topology:read', 'search', 'realtime', 'export', 'audit:read', 'settings:write'],
+  admin: ['inventory:read', 'inventory:write', 'credentials:write', 'backups:read', 'backups:run', 'tokens:manage', 'auth:manage', 'ports:configure', 'topology:read', 'search', 'realtime', 'export', 'audit:read', 'settings:write'],
 }
 
 export function login(role = 'admin') {

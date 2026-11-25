@@ -64,5 +64,11 @@ Cocher chaque ligne avant la mise en production.
 - [ ] Alertes : échecs d'authentification en rafale, refus `authz.denied`, 5xx, rupture de chaîne d'audit.
 - [ ] Procédure de mise à jour : `git pull` → `./scripts/security-check.sh` → `docker compose build` → `docker compose up -d` (le service `migrate` applique Alembic) → vérifier `/healthz`.
 
+## Modification des ports (écriture)
+- [ ] `port_config_enabled` laissé à **faux** tant que la fonction n'est pas utilisée ; activé seulement pour les opérations prévues.
+- [ ] Compte SSH **dédié** pour LastHop avec droits minimaux (idéalement autorisation de commandes TACACS+/RADIUS : `interface`, `vlan`, `switchport`, `port`, `write memory`/`save` ; rien d'autre) ; ACL source = hôte LastHop.
+- [ ] Première utilisation sur un **port de test** hors production, avec sauvegarde de configuration récente (bouton Sauvegarder de la fiche).
+- [ ] Revue de l'audit : `port_config.preview`, `port_config.apply`, `port_config.result` (commandes, auteur, avant/après).
+
 ## Nouveaux équipements
 - [ ] Diagnostic SNMP (fiche équipement) lancé après chaque ajout : aucune fonction « impossible » inattendue ; parcours fournis par des tiers **anonymisés et relus** avant partage ([docs/ADD_DRIVER.md](ADD_DRIVER.md)).

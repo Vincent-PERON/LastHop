@@ -39,3 +39,10 @@ IP_NET_TO_MEDIA_MAC = "1.3.6.1.2.1.4.22.1.2"  # ipNetToMediaPhysAddress (idx: if
 IP_NET_TO_MEDIA_TYPE = "1.3.6.1.2.1.4.22.1.4"  # ipNetToMediaType : 3 = dynamic, 4 = static
 VTP_VLAN_STATE = "1.3.6.1.4.1.9.9.46.1.3.1.1.2"  # idx: managementDomain.vlanIndex ; 1 = operational
 VTP_VLAN_TYPE = "1.3.6.1.4.1.9.9.46.1.3.1.1.3"  # 1 = ethernet
+
+# --- VLAN des ports (affichage et garde-fous de la configuration des ports ; lecture seule)
+DOT1Q_VLAN_STATIC_NAME = "1.3.6.1.2.1.17.7.1.4.3.1.1"  # dot1qVlanStaticName (idx : VLAN)
+DOT1Q_PVID = "1.3.6.1.2.1.17.7.1.4.5.1.1"  # dot1qPvid (idx : port de bridge)
+CISCO_VM_VLAN = "1.3.6.1.4.1.9.9.68.1.2.2.1.2"  # vmVlan : VLAN d'accès (idx : ifIndex)
+CISCO_TRUNK_NATIVE = "1.3.6.1.4.1.9.9.46.1.6.1.1.5"  # vlanTrunkPortNativeVlan (idx : ifIndex)
+VTP_VLAN_NAME = "1.3.6.1.4.1.9.9.46.1.3.1.1.4"  # vtpVlanName (idx : domaine.VLAN)

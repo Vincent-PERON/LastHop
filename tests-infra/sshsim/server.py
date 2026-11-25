@@ -85,6 +85,8 @@ class Persona:
     alt_key: bool = False
     page_size: int = 18
     paging: bool = False
+    config: str | None = None  # cisco | comware | cx | os : accepte le mode configuration (tests de modification de port)
+    reject: tuple = ()  # fragments de commandes refusés en configuration
     state: dict = field(default_factory=dict)
 
 
@@ -105,7 +107,58 @@ PERSONAS = {
     2212: Persona("sw-core#", CISCO_RUNNING, CISCO_STARTUP, startup_cmd="show nvram"),  # startup refusé, running OK
     2215: Persona("sw-core#", CISCO_RUNNING, CISCO_STARTUP, alt_key=True),  # autre clé d'hôte
     2216: Persona("sw-core#", CISCO_RUNNING, CISCO_STARTUP, delay=6.0),  # très lent
+    # --- Modification de port : un faux équipement par syntaxe ; `show ztest-log` rend toutes les commandes de configuration reçues
+    2217: Persona("sw-cfg#", CISCO_RUNNING, CISCO_STARTUP, config="cisco"),
+    2218: Persona("<sw-cfg>", COMWARE, COMWARE, pager_off="screen-length disable", config="comware",
+                  running_cmd="display current-configuration", startup_cmd="display saved-configuration"),
+    2219: Persona("sw-cx#", ARUBA, ARUBA, pager_off="no page", config="cx"),
+    2220: Persona("sw-os#", ARUBA, ARUBA, pager_off="no page", config="os", startup_cmd="show config"),
+    2221: Persona("sw-cfg#", CISCO_RUNNING, CISCO_STARTUP, config="cisco", reject=("native vlan",)),  # refuse une commande
 }
+
+
+def config_prompt(kind: str, base: str, mode: str, iface: str) -> str:
+    name = base.strip("#<>")
+    if kind == "comware":
+        return {"exec": f"<{name}>", "config": f"[{name}]", "if": f"[{name}-{iface}]"}[mode]
+    return {"exec": f"{name}#", "config": f"{name}(config)#", "if": f"{name}(config-if)#"}[mode]
+
+
+def config_command(p: "Persona", cmd: str, st: dict) -> str | None:
+    """Traite une commande de configuration ; retourne le texte de sortie ou None si la commande n'est pas de configuration."""
+    k, mode = p.config, st["mode"]
+    enter = {"cisco": "configure terminal", "comware": "system-view", "cx": "configure terminal", "os": "configure"}[k]
+    leave = {"cisco": "end", "comware": "return", "cx": "end", "os": "end"}[k]
+    save = {"cisco": "write memory", "comware": "save force", "cx": "write memory", "os": "write memory"}[k]
+    if cmd == "clear ztest-log":
+        st["log"].clear()
+        st["mode"] = "exec"
+        return "cleared"
+    if cmd == "show ztest-log":
+        return "\r\n".join(st["log"]) or "(vide)"
+    if mode == "exec":
+        if cmd == enter:
+            st["mode"] = "config"
+            return ""
+        if cmd == save:
+            st["log"].append("SAVED")
+            return {"cisco": "Building configuration...\r\n[OK]", "comware": "Validating file. Please wait...\r\nSaved the current configuration to mainboard device successfully.",
+                    "cx": "Copying configuration: [Success]", "os": ""}[k]
+        return None
+    if cmd == leave:
+        st["mode"] = "exec"
+        return ""
+    if any(frag in cmd for frag in p.reject):
+        return "% Invalid input detected at '^' marker."
+    if cmd.startswith("interface "):
+        st["mode"], st["iface"] = "if", cmd.split(" ", 1)[1]
+        st["log"].append(cmd)
+        return ""
+    allowed = ("switchport", "no switchport", "port ", "undo port", "vlan ", "no vlan")
+    if cmd.startswith(allowed):
+        st["log"].append(cmd)
+        return ""
+    return "% Invalid input detected at '^' marker."
 
 
 class Server(asyncssh.SSHServer):
@@ -153,6 +206,17 @@ def make_handler(p: Persona):
             w(cmd + "\r\n")  # écho de la commande, comme un vrai équipement
             if cmd in ("exit", "quit", "logout"):
                 break
+            if p.config:
+                st = p.state.setdefault("s", {"mode": "exec", "log": [], "iface": ""})
+                if p.pager_off and cmd == p.pager_off:
+                    paging = False
+                    w(config_prompt(p.config, p.prompt, st["mode"], st["iface"]))
+                    continue
+                out = config_command(p, cmd, st)
+                if out is not None:
+                    w((out + "\r\n") if out else "")
+                    w(config_prompt(p.config, p.prompt, st["mode"], st["iface"]))
+                    continue
             if p.pager_off and cmd == p.pager_off:
                 paging = False
             elif cmd in ("terminal length 0", "screen-length disable", "no page", "terminal length 1000"):

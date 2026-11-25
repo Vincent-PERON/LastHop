@@ -123,6 +123,10 @@ a["1.3.6.1.2.1.17.7.1.4.3.1.4.30"] = ("4x", bitmap([]) if False else "00")
 fdb_dot1d(a, [(f"02aa00000{i:03x}"[-12:].rjust(12, "0"), 3, 3) for i in range(25)]
           + [("02bb00000001", 4, 3), ("02bb00000002", 4, 3), ("02bb00000003", 4, 4), ("02bb00000004", 4, 2)]
           + [("02ee00000001", 2, 3), ("02cc00000000", 1, 3), ("02dd00000001", 1, 3)])
+for vid, vname in ((10, "USERS"), (20, "VOICE"), (30, "MGMT")):
+    a[f"1.3.6.1.2.1.17.7.1.4.3.1.1.{vid}"] = ("4", vname)
+for bp, pv in ((1, 1), (2, 10), (3, 10), (4, 20)):
+    a[f"1.3.6.1.2.1.17.7.1.4.5.1.1.{bp}"] = ("66", str(pv))   # dot1qPvid
 write("aruba", a)
 
 # ---------------- Comware (distribution) ----------------
@@ -146,6 +150,10 @@ for ip, mac, st in [("10.50.0.11", "02bb00000001", 1), ("10.50.0.12", "02bb00000
                     ("10.50.0.33", "02cc00000003", 1), ("10.50.0.40", "02dd00000001", 1),
                     ("10.50.0.99", "02ff00000099", 7), ("10.50.0.98", "02ff00000098", 5), ("10.50.0.255", "ffffffffffff", 1)]:
     arp_physical(c, 100, ip, mac, st)
+for vid, vname in ((1, "default"), (20, "VOICE")):
+    c[f"1.3.6.1.2.1.17.7.1.4.3.1.1.{vid}"] = ("4", vname)
+for bp in range(1, 5):
+    c[f"1.3.6.1.2.1.17.7.1.4.5.1.1.{bp}"] = ("66", "1")
 write("comware", c)
 
 # ---------------- Cisco (cœur) : CDP uniquement + trunk VTP ----------------
@@ -167,6 +175,11 @@ for vlan in (10, 20, 1002):
     k[f"1.3.6.1.4.1.9.9.46.1.3.1.1.3.1.{vlan}"] = ("2", "1" if vlan < 1002 else "3")
 arp_media(k, 5001, "10.60.0.5", "02dd00000001")
 arp_media(k, 5001, "10.60.0.6", "02dd00000009", typ=2)   # invalid : ignoré
+for vid, vname in ((10, "USERS"), (20, "VOICE"), (1002, "fddi-default")):
+    k[f"1.3.6.1.4.1.9.9.46.1.3.1.1.4.1.{vid}"] = ("4", vname)
+for ifx, vm in ((10102, 10), (10103, 10), (10104, 20)):
+    k[f"1.3.6.1.4.1.9.9.68.1.2.2.1.2.{ifx}"] = ("2", str(vm))      # vmVlan (ports d'accès)
+k["1.3.6.1.4.1.9.9.46.1.6.1.1.5.10101"] = ("2", "1")               # VLAN natif du trunk Gi1/0/1
 write("cisco", k)
 # Instances de bridge par VLAN : la numérotation des ports de bridge DIFFÈRE d'un VLAN à l'autre
 for vlan, bmap, fdb in (

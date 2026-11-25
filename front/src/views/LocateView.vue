@@ -17,9 +17,9 @@ let stream = null
 
 const STEP_LABEL = {
   started: 'Recherche lancée',
-  arp_resolving: 'Résolution de l’IP via l’ARP des passerelles',
+  arp_resolving: 'Recherche de l’adresse MAC de l’IP auprès des routeurs',
   arp_resolved: 'MAC trouvée',
-  fdb_querying: 'Interrogation des tables FDB des switchs',
+  fdb_querying: 'Recherche du port sur les switchs (table des adresses MAC)',
 }
 
 function reset() {

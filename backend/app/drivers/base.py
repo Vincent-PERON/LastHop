@@ -6,7 +6,7 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import ClassVar
 
-from app.drivers.models import ArpInfo, FdbInfo, IfInfo, LiveHit, NeighborInfo, TopologySnapshot
+from app.drivers.models import ArpInfo, FdbInfo, IfInfo, LiveHit, NeighborInfo, PortVlans, TopologySnapshot
 from app.snmp import bridge, oids
 from app.snmp.client import SnmpClient, SnmpError, SnmpTarget, as_text
 
@@ -66,14 +66,25 @@ class Driver(ABC):
         self, client: SnmpClient, *, min_tagged_vlans: int = 2, max_repetitions: int = 25
     ) -> TopologySnapshot:
         ifs = await bridge.collect_interfaces(client, max_repetitions)
+        trunks = await self.collect_trunks(client, ifs, min_tagged_vlans, max_repetitions)
         return TopologySnapshot(
             chassis_mac=await bridge.collect_chassis_mac(client),
             sys_name=as_text((await client.get(oids.SYS_NAME)).get(oids.SYS_NAME), 100) or None,
             interfaces=ifs,
             neighbors=await self.collect_neighbors(client, ifs, max_repetitions),
-            trunk_if_indexes=await self.collect_trunks(client, ifs, min_tagged_vlans, max_repetitions),
+            trunk_if_indexes=trunks,
             mac_counts=await bridge.collect_mac_counts(client, ifs, max_repetitions),
+            vlans=await self.collect_vlans(client, max_repetitions),
+            port_vlans=await self.collect_port_vlans(client, ifs, trunks, max_repetitions),
         )
+
+    async def collect_vlans(self, client: SnmpClient, max_rep: int) -> dict[int, str]:
+        return await bridge.collect_vlans(client, max_rep)
+
+    async def collect_port_vlans(
+        self, client: SnmpClient, ifs: list[IfInfo], trunks: set[int], max_rep: int
+    ) -> dict[int, PortVlans]:
+        return await bridge.collect_port_vlans(client, ifs, trunks, max_rep)
 
     # --- Temps réel (lot e)
     async def find_arp(self, client: SnmpClient, ip: str, max_rep: int) -> tuple[str, int] | None:

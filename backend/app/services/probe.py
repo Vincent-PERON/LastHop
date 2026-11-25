@@ -278,6 +278,11 @@ async def process_job(db: AsyncSession, keyring: KeyRing, job_id: uuid.UUID, red
             result = await _run_device_test(db, keyring, job.params)
         elif job.kind == "diagnose":
             result = await _run_diagnose(db, keyring, job.params)
+        elif job.kind == "port_config":
+            from app.services.port_config_job import run_port_config
+
+            result = await run_port_config(db, keyring, job.params)
+            error = result.get("error_code")
         elif job.kind == "topology":
             result = await _run_topology(db, keyring, job.params)
         elif job.kind == "realtime":
