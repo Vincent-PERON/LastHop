@@ -30,7 +30,7 @@ Cocher chaque ligne avant la mise en production.
 - [ ] `LASTHOP_ENV=prod` (refuse un IdP non HTTPS).
 
 - [ ] Front : servi **uniquement** derrière le proxy (CSP, HSTS, `X-Frame-Options`) ; vérifier avec `npm run csp-preview` après toute modification des dépendances (aucune violation `style-src`/`script-src`).
-- [ ] Front : `npm audit` à 0 ; mises à jour via Renovate ; ne jamais ajouter `unsafe-inline` à la CSP (corriger la bibliothèque ou son usage).
+- [ ] Front : `npm audit` à 0 ; mises à jour des dépendances revues régulièrement ; ne jamais ajouter `unsafe-inline` à la CSP (corriger la bibliothèque ou son usage).
 
 ## Identité
 - [ ] **Super admin local** : mot de passe initial changé à la première connexion ; `secrets/local_admin_password` supprimé de l'hôte ensuite ; **TOTP activé** (Mon compte) et ses 10 codes de secours rangés dans un coffre ; à défaut, accès à la page de connexion restreint par le réseau (VPN / liste d'adresses).
@@ -56,7 +56,7 @@ Cocher chaque ligne avant la mise en production.
 ## Conteneurs et supply chain
 - [ ] Images scannées Trivy (HIGH/CRITICAL bloquants), épinglées par digest.
 - [ ] `./scripts/security-check.sh` vert avant chaque mise en production (gitleaks, semgrep, hadolint, Trivy, bandit, pip-audit, npm audit, scan des images) .
-- [ ] Renovate installé sur le dépôt (GitHub App) et PR de sécurité traitées sous 7 jours .
+- [ ] Mises à jour de sécurité des dépendances appliquées sous 7 jours (`./scripts/security-check.sh` signale les vulnérabilités connues).
 - [ ] `docker compose ps` : tous `healthy` ; `docker inspect` confirme `ReadonlyRootfs=true` et `CapDrop=[ALL]` pour api/worker/beat.
 
 ## Exploitation

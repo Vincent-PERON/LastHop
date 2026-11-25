@@ -134,7 +134,6 @@ LastHop/
 ├─ backend/tests/ unit/ integration/ snmprec/{aruba,comware,cisco}/ conftest.py
 ├─ frontend/ (Vue 3 + Vite, JS, TanStack Table, Cytoscape.js) src/{views,components,api,stores}
 ├─ docs/ THREAT_MODEL.md  HARDENING_CHECKLIST.md  SWITCH_SNMPV3.md  OPERATIONS.md
-├─ renovate.json
 └─ README.md
 ```
 
@@ -153,7 +152,7 @@ LastHop/
 ## 5. Découpage en lots (inchangé par rapport à votre demande)
 
 (a) socle + OIDC + RBAC + audit + crypto → (b) inventaire/SNMP/drivers de base → (c) topologie → (d) learning →
-(e) real-time → (f) front → (g) tests snmpsim + CI sécurité. Chaque lot livre : code, tests verts, commandes, points de sécurité.
+(e) real-time → (f) front → (g) tests snmpsim + contrôles de sécurité. Chaque lot livre : code, tests verts, commandes, points de sécurité.
 
 ## 6. Points à trancher / risques identifiés
 

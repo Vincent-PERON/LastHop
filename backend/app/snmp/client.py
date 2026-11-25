@@ -1,7 +1,7 @@
 """Client SNMP asynchrone — LECTURE SEULE.
 
 Seul module important pysnmp. Il n'expose que GET, GETNEXT-walk et GETBULK-walk : aucune opération d'écriture
-n'existe dans le code (un test CI échoue si une primitive d'écriture apparaît dans `app/`).
+n'existe dans le code (un test échoue si une primitive d'écriture apparaît dans `app/`).
 Les valeurs reçues d'un équipement sont NON FIABLES : toujours passer par `as_text` avant stockage/affichage.
 """
 

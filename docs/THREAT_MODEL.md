@@ -80,7 +80,7 @@ Résiduel : Postgres exige quelques capacités au premier démarrage ; TLS inter
 Dépendances épinglées avec hash (`pip --require-hashes`), puis, en local (`scripts/security-check.sh`) :
 `pip-audit` (production et développement), `npm audit`, bandit, semgrep (Python, OWASP Top 10, JavaScript, Dockerfile, secrets), 
 gitleaks (fichiers **et historique git**), hadolint, Trivy (dépôt : dépendances/secrets/configuration ; images : HIGH/CRITICAL corrigeables bloquants).
-Renovate pour les mises à jour.
+Mises à jour revues à la main.
 Images : `apt-get upgrade` (API) et Alpine 3.24 + `apk upgrade` (front, utilisateur non privilégié) pour embarquer les correctifs de l'OS ; premier scan réel : 1 CVE HIGH (API)
 et 6 (front, base nginx sur Alpine 3.21 en fin de support) corrigées.
 Bibliothèque SNMP : `pysnmp` officiel (activement maintenu).

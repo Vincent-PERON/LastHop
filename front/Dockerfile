@@ -13,7 +13,7 @@ RUN npm run build
 # et l'image n'embarque rien d'autre que nginx et les fichiers statiques.
 FROM alpine:3.24
 # Pas d'épinglage de version apk (DL3018) : on veut précisément la dernière version corrigée à chaque construction ;
-# la reproductibilité est assurée par l'épinglage de l'image de base (digest, Renovate) et le scan Trivy en CI.
+# la reproductibilité est assurée par l'épinglage de l'image de base et le scan Trivy (scripts/security-check.sh).
 # hadolint ignore=DL3018
 RUN apk upgrade --no-cache && apk add --no-cache nginx
 COPY nginx.conf /etc/nginx/nginx.conf
