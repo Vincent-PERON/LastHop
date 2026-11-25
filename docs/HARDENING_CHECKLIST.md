@@ -30,7 +30,7 @@ Cocher chaque ligne avant la mise en production.
 - [ ] `LASTHOP_ENV=prod` (refuse un IdP non HTTPS).
 
 - [ ] Front : servi **uniquement** derrière le proxy (CSP, HSTS, `X-Frame-Options`) ; vérifier avec `npm run csp-preview` après toute modification des dépendances (aucune violation `style-src`/`script-src`).
-- [ ] Front : `npm audit` à 0 en CI ; mises à jour via Renovate ; ne jamais ajouter `unsafe-inline` à la CSP (corriger la bibliothèque ou son usage).
+- [ ] Front : `npm audit` à 0 ; mises à jour via Renovate ; ne jamais ajouter `unsafe-inline` à la CSP (corriger la bibliothèque ou son usage).
 
 ## Identité
 - [ ] **Super admin local** : mot de passe initial changé à la première connexion ; `secrets/local_admin_password` supprimé de l'hôte ensuite ; **TOTP activé** (Mon compte) et ses 10 codes de secours rangés dans un coffre ; à défaut, accès à la page de connexion restreint par le réseau (VPN / liste d'adresses).
@@ -54,16 +54,15 @@ Cocher chaque ligne avant la mise en production.
 - [ ] Optionnel : TLS Postgres/Redis (`LASTHOP_DB_SSL_CA_FILE`, `LASTHOP_REDIS_TLS_CA_FILE`) avec PKI interne.
 
 ## Conteneurs et supply chain
-- [ ] Images construites par la CI, scannées Trivy (HIGH/CRITICAL bloquants), épinglées par digest.
-- [ ] `./scripts/security-check.sh` vert avant chaque mise en production (mêmes contrôles que la CI : gitleaks, semgrep, hadolint, Trivy, bandit, pip-audit, npm audit, scan des images) ; CodeQL actif sur le dépôt.
-- [ ] Renovate installé sur le dépôt (GitHub App) et PR de sécurité traitées sous 7 jours ; SBOM de la CI (`sbom`) conservés avec chaque version déployée.
-- [ ] Protection de la branche `main` : CI obligatoire (jobs backend, front, tests, static-security, images), revue obligatoire, historique linéaire.
+- [ ] Images scannées Trivy (HIGH/CRITICAL bloquants), épinglées par digest.
+- [ ] `./scripts/security-check.sh` vert avant chaque mise en production (gitleaks, semgrep, hadolint, Trivy, bandit, pip-audit, npm audit, scan des images) .
+- [ ] Renovate installé sur le dépôt (GitHub App) et PR de sécurité traitées sous 7 jours .
 - [ ] `docker compose ps` : tous `healthy` ; `docker inspect` confirme `ReadonlyRootfs=true` et `CapDrop=[ALL]` pour api/worker/beat.
 
 ## Exploitation
 - [ ] Logs JSON centralisés ; vérifier l'absence de communities/clés/tokens (`grep -ri community`).
 - [ ] Alertes : échecs d'authentification en rafale, refus `authz.denied`, 5xx, rupture de chaîne d'audit.
-- [ ] Procédure de mise à jour : `git pull` → CI verte → `docker compose build` → `docker compose up -d` (le service `migrate` applique Alembic) → vérifier `/healthz`.
+- [ ] Procédure de mise à jour : `git pull` → `./scripts/security-check.sh` → `docker compose build` → `docker compose up -d` (le service `migrate` applique Alembic) → vérifier `/healthz`.
 
 ## Nouveaux équipements
 - [ ] Diagnostic SNMP (fiche équipement) lancé après chaque ajout : aucune fonction « impossible » inattendue ; parcours fournis par des tiers **anonymisés et relus** avant partage ([docs/ADD_DRIVER.md](ADD_DRIVER.md)).

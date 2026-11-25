@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Contrôles de sécurité identiques à ceux de la CI (.github/workflows/ci.yml), exécutables en local.
+# Contrôles de sécurité (secrets, analyse statique, dépendances, images), exécutables en local.
 # Prérequis : Docker. Les outils tournent dans des conteneurs : rien à installer. Code de sortie ≠ 0 au premier échec.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/.." && pwd)"

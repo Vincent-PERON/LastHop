@@ -13,7 +13,7 @@ Statut : **proposition**, aucun code écrit. Date : 2026-11-22.
 
 Précautions : version épinglée avec hashes (`pip-compile --generate-hashes`), et un adaptateur
 `snmp/client.py` qui est le **seul** module important `pysnmp`. Il n'expose que GET / GETNEXT / GETBULK / walk,
-donc aucun SET n'existe dans le code. Un test CI (grep AST) échoue si `set_cmd`/`SetRequest` apparaît.
+donc aucun SET n'existe dans le code. Un test (grep) échoue si `set_cmd`/`SetRequest` apparaît.
 Plan B documenté si pysnmp venait à stagner : `puresnmp` (2.0.2, actif), derrière la même interface.
 
 ## 1. Architecture
@@ -134,7 +134,7 @@ LastHop/
 ├─ backend/tests/ unit/ integration/ snmprec/{aruba,comware,cisco}/ conftest.py
 ├─ frontend/ (Vue 3 + Vite, JS, TanStack Table, Cytoscape.js) src/{views,components,api,stores}
 ├─ docs/ THREAT_MODEL.md  HARDENING_CHECKLIST.md  SWITCH_SNMPV3.md  OPERATIONS.md
-├─ .github/workflows/ci.yml  renovate.json
+├─ renovate.json
 └─ README.md
 ```
 
