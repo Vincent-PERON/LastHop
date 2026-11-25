@@ -5,6 +5,7 @@ COPY package.json package-lock.json .npmrc ./
 # ignore-scripts (via .npmrc) : aucun script d'installation de dépendance n'est exécuté
 RUN npm ci --ignore-scripts
 COPY index.html vite.config.js ./
+COPY public ./public
 COPY src ./src
 RUN npm run build
 

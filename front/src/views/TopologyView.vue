@@ -6,7 +6,8 @@ import cytoscape from 'cytoscape'
 import ErrorBanner from '../components/ErrorBanner.vue'
 import { get } from '../api/client.js'
 import { can } from '../stores/session.js'
-import { buildElements, STYLE } from '../utils/topology.js'
+import { buildElements, styleFor } from '../utils/topology.js'
+import { theme } from '../stores/theme.js'
 
 const el = ref(null)
 const sites = ref([])
@@ -43,7 +44,7 @@ async function load() {
     await nextTick()
     cy?.destroy()
     markCytoscapeStyle()
-    cy = cytoscape({ container: el.value, elements, style: STYLE, minZoom: 0.2, maxZoom: 3 })
+    cy = cytoscape({ container: el.value, elements, style: styleFor(theme.resolved), minZoom: 0.2, maxZoom: 3 })
     cy.on('tap', 'node', (evt) => {
       const d = evt.target.data()
       selected.value = d.managed ? { id: d.id, label: d.label, role: d.role, vendor: d.vendor, model: d.model } : { label: d.label, role: 'externe (non géré)' }
@@ -67,6 +68,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => cy?.destroy())
 watch([siteId, unmanaged], load)
+watch(() => theme.resolved, (m) => cy?.style(styleFor(m)).update()) // le graphe suit le thème sans rechargement
 </script>
 
 <template>

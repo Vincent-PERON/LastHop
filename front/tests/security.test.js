@@ -18,7 +18,12 @@ describe('règles de sécurité du code front', () => {
   })
 
   it('aucun stockage navigateur (les jetons restent dans des cookies HttpOnly, jamais en JS)', () => {
-    expect(SRC.filter((f) => /localStorage|sessionStorage|indexedDB|document\.cookie/.test(read(f)))).toEqual([])
+    // Seule exception : le CHOIX de thème (« light | dark | system ») dans stores/theme.js, sous une clé unique, sans donnée sensible
+    const users = SRC.filter((f) => /localStorage|sessionStorage|indexedDB|document\.cookie/.test(read(f)))
+    expect(users).toEqual(['src/stores/theme.js'])
+    expect(/sessionStorage|indexedDB|document\.cookie/.test(read('src/stores/theme.js'))).toBe(false)
+    expect([...read('src/stores/theme.js').matchAll(/(?:get|set)Item\(([^,)]+)/g)].map((m) => m[1]).every((k) => k === 'KEY')).toBe(true)
+    expect(read('src/stores/theme.js')).toMatch(/const KEY = 'lasthop-theme'/)
   })
 
   it('aucun secret, URL externe ni CDN en dur', () => {

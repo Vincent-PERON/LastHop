@@ -6,6 +6,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ErrorBanner from '../components/ErrorBanner.vue'
 import Icon from '../components/Icon.vue'
+import ThemeMenu from '../components/ThemeMenu.vue'
 import { get, post } from '../api/client.js'
 import { setMe, safeNext, oidcLoginUrl } from '../stores/session.js'
 
@@ -94,6 +95,7 @@ function viaOidc(p) {
 
 <template>
   <main class="login-page">
+    <div class="login-theme"><ThemeMenu /></div>
     <section class="login-card" aria-labelledby="login-title">
       <div class="login-brand"><span class="mark">L</span><h1 id="login-title">Last<span>Hop</span></h1></div>
       <p class="hint">Connectez-vous pour rechercher une adresse IP ou MAC et consulter la topologie.</p>

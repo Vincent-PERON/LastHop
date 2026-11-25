@@ -3,7 +3,10 @@ import App from './App.vue'
 import { router } from './router.js'
 import { api, setUnauthorizedHandler } from './api/client.js'
 import { setMe, clearSession } from './stores/session.js'
+import { initTheme } from './stores/theme.js'
 import './styles.css'
+
+initTheme()
 
 // Session expirée en cours d'utilisation : retour à la page de connexion (le chemin courant est conservé)
 setUnauthorizedHandler(() => {

@@ -5,6 +5,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ErrorBanner from '../components/ErrorBanner.vue'
 import TotpSection from '../components/TotpSection.vue'
+import ThemeMenu from '../components/ThemeMenu.vue'
 import { get, post } from '../api/client.js'
 import { session, setMe } from '../stores/session.js'
 
@@ -37,6 +38,7 @@ async function submit() {
 
 <template>
   <main :class="forced() ? 'login-page' : 'content'">
+    <div v-if="forced()" class="login-theme"><ThemeMenu /></div>
     <h1 v-if="!forced()" class="h-sm">Mon compte</h1>
     <section :class="forced() ? 'login-card' : 'card narrow'" aria-labelledby="pw-title">
       <h1 v-if="forced()" id="pw-title" class="h-sm">Définissez votre mot de passe</h1>
